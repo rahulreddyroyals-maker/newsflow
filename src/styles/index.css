@@ -1,0 +1,235 @@
+/* ==========================================================================
+   NewsFlow — Design Tokens
+   Palette pulled straight from the mark: deep newsprint navy, the blue→orange
+   "flow" gradient running through the N, and the ring's warm-to-cool sweep
+   used sparingly as a signature accent (never as a background).
+   ========================================================================== */
+
+:root {
+  /* Color */
+  --nf-navy: #0F1F3D;
+  --nf-navy-soft: #1B2C4F;
+  --nf-blue: #2452D9;
+  --nf-blue-light: #3E7BFF;
+  --nf-orange: #FF5B1F;
+  --nf-orange-light: #FF9A3D;
+  --nf-paper: #FFFFFF;
+  --nf-paper-dim: #F4F6FB;
+  --nf-line: #E6E9F2;
+  --nf-ink: #161B26;
+  --nf-ink-soft: #5B6473;
+  --nf-ink-faint: #9AA2B1;
+  --nf-success: #1E9E5A;
+  --nf-danger: #E0392B;
+  --nf-warning: #C97A0E;
+
+  --nf-flow: linear-gradient(95deg, var(--nf-blue) 0%, var(--nf-blue-light) 35%, var(--nf-orange) 70%, var(--nf-orange-light) 100%);
+  --nf-ring: linear-gradient(135deg, #FFB23D 0%, #FF5B1F 28%, #C73B6B 55%, #6E3FD1 78%, #2452D9 100%);
+  --nf-navy-fade: linear-gradient(180deg, rgba(15,31,61,0) 0%, rgba(15,31,61,0.78) 100%);
+
+  /* Type */
+  --nf-font-display: 'Manrope', 'Noto Sans Telugu', system-ui, sans-serif;
+  --nf-font-body: 'Manrope', 'Noto Sans Telugu', system-ui, sans-serif;
+
+  /* Layout */
+  --nf-radius-sm: 8px;
+  --nf-radius-md: 14px;
+  --nf-radius-lg: 22px;
+  --nf-header-h: 58px;
+  --nf-nav-h: 64px;
+  --nf-max-w: 480px;
+  --nf-shadow-card: 0 1px 2px rgba(15,31,61,0.06), 0 8px 24px -12px rgba(15,31,61,0.18);
+  --nf-shadow-pop: 0 12px 32px -8px rgba(15,31,61,0.28);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--nf-paper-dim);
+  color: var(--nf-ink);
+  font-family: var(--nf-font-body);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+}
+
+#root {
+  width: 100%;
+  max-width: var(--nf-max-w);
+  min-height: 100vh;
+  background: var(--nf-paper-dim);
+  position: relative;
+  box-shadow: 0 0 60px rgba(15,31,61,0.06);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--nf-font-display);
+  color: var(--nf-navy);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0; }
+
+a { color: inherit; text-decoration: none; }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 15px;
+}
+
+::-webkit-scrollbar { display: none; }
+
+img { display: block; max-width: 100%; }
+
+/* Focus visibility, kept even on mobile for a11y */
+:focus-visible {
+  outline: 2px solid var(--nf-blue);
+  outline-offset: 2px;
+}
+
+/* Signature flow rule — the one recurring accent, used under headings,
+   as the active-tab indicator, and as the screen's loading bar. Nowhere else. */
+.nf-flow-rule {
+  height: 3px;
+  width: 34px;
+  border-radius: 3px;
+  background: var(--nf-flow);
+}
+
+.nf-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nf-paper-dim);
+}
+
+.nf-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(var(--nf-nav-h) + 12px);
+}
+
+.nf-container {
+  padding: 0 16px;
+}
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--nf-radius-md);
+  padding: 13px 18px;
+  font-weight: 700;
+  font-size: 15px;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.nf-btn:active { transform: scale(0.97); }
+.nf-btn-primary {
+  background: var(--nf-navy);
+  color: #fff;
+}
+.nf-btn-flow {
+  background: var(--nf-flow);
+  color: #fff;
+}
+.nf-btn-ghost {
+  background: var(--nf-paper);
+  color: var(--nf-navy);
+  border: 1.5px solid var(--nf-line);
+}
+.nf-btn-block { width: 100%; }
+.nf-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+.nf-input-group { margin-bottom: 14px; }
+.nf-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--nf-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.nf-input, .nf-select, .nf-textarea {
+  width: 100%;
+  border: 1.5px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  padding: 12px 14px;
+  background: var(--nf-paper);
+  color: var(--nf-ink);
+}
+.nf-input:focus, .nf-select:focus, .nf-textarea:focus {
+  border-color: var(--nf-blue);
+}
+.nf-textarea { resize: vertical; min-height: 96px; }
+
+.nf-card {
+  background: var(--nf-paper);
+  border-radius: var(--nf-radius-md);
+  box-shadow: var(--nf-shadow-card);
+}
+
+.nf-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: var(--nf-paper);
+  border: 1.5px solid var(--nf-line);
+  color: var(--nf-ink-soft);
+  white-space: nowrap;
+}
+.nf-chip.active {
+  background: var(--nf-navy);
+  border-color: var(--nf-navy);
+  color: #fff;
+}
+
+.nf-badge {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+.nf-badge-pending { background: #FFF1DD; color: var(--nf-warning); }
+.nf-badge-approved { background: #E3F6EA; color: var(--nf-success); }
+.nf-badge-rejected { background: #FBE7E5; color: var(--nf-danger); }
+
+.nf-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--nf-ink-soft);
+}
+
+.nf-skeleton {
+  background: linear-gradient(90deg, var(--nf-line) 25%, #f0f2f8 37%, var(--nf-line) 63%);
+  background-size: 400% 100%;
+  animation: nf-shimmer 1.4s ease infinite;
+  border-radius: var(--nf-radius-sm);
+}
+@keyframes nf-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

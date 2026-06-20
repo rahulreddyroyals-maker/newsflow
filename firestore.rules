@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function myRole() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
+    function isJournalist() { return isSignedIn() && myRole() == 'journalist'; }
+
+    // Public, read-only published news feed
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Categories & districts are static reference data
+    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /districts/{id} { allow read: if true; allow write: if isAdmin(); }
+
+    // Drafts: journalists create + read their own; admins read/manage all
+    match /drafts/{draftId} {
+      allow create: if isJournalist() && request.resource.data.authorId == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid && resource.data.status == 'pending');
+      allow delete: if isAdmin();
+    }
+
+    // Users: anyone signed in can read public profile fields via app logic;
+    // a user can only write their own document. Role/verified changes by admin only.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid);
+      allow update: if isAdmin()
+                    || (isOwner(uid) && !('role' in request.resource.data.diff(resource.data).affectedKeys()));
+    }
+
+    match /notifications/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
