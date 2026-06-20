@@ -1,4 +1,4 @@
-﻿name: NewsFlow RSS Ingest
+name: NewsFlow RSS Ingest
 
 on:
   schedule:

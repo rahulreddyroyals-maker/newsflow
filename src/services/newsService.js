@@ -1,10 +1,26 @@
 // src/services/newsService.js
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, increment, arrayUnion, arrayRemove
+  query, where, limit, onSnapshot, serverTimestamp, increment, arrayUnion, arrayRemove
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase'
+
+// NOTE on sorting: queries below intentionally avoid combining where() with
+// orderBy() on a different field. Firestore requires a manually-created
+// composite index for that combination — without it, the query fails and
+// (with onSnapshot) hangs silently with no error shown. Sorting client-side
+// instead means everything works immediately with zero extra Firebase setup,
+// which matters more than raw query efficiency at MVP scale. If your `news`
+// or `drafts` collections grow past a few thousand documents, revisit this
+// and create indexes via `firebase deploy --only firestore:indexes` instead.
+
+function sortByCreatedAtDesc(docs) {
+  return docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+}
+function sortByCreatedAtAsc(docs) {
+  return docs.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0))
+}
 
 // ---------- USERS ----------
 export async function getUserProfile(uid) {
@@ -23,14 +39,16 @@ export async function toggleBookmark(uid, newsId, isBookmarked) {
 }
 
 // ---------- NEWS (published, reader-facing) ----------
-export function listenToFeed({ district, category }, callback) {
+export function listenToFeed({ district, category }, callback, onError) {
   const clauses = [where('status', '==', 'approved')]
   if (district && district !== 'All') clauses.push(where('district', '==', district))
   if (category && category !== 'All') clauses.push(where('category', '==', category))
-  const q = query(collection(db, 'news'), ...clauses, orderBy('createdAt', 'desc'), limit(40))
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  })
+  const q = query(collection(db, 'news'), ...clauses, limit(100))
+  return onSnapshot(
+    q,
+    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 40)),
+    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
+  )
 }
 
 export async function getNewsById(id) {
@@ -45,17 +63,14 @@ export async function incrementViewCount(id) {
 export async function searchNews(keyword) {
   // Simple client-side filter MVP. For production, swap in Algolia/Typesense
   // since Firestore doesn't do full-text search natively.
-  const snap = await getDocs(
-    query(collection(db, 'news'), where('status', '==', 'approved'), orderBy('createdAt', 'desc'), limit(200))
-  )
+  const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
+  const docs = sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   const lower = keyword.trim().toLowerCase()
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((n) =>
-      n.headline?.toLowerCase().includes(lower) ||
-      n.summary?.toLowerCase().includes(lower) ||
-      n.headlineEn?.toLowerCase().includes(lower)
-    )
+  return docs.filter((n) =>
+    n.headline?.toLowerCase().includes(lower) ||
+    n.summary?.toLowerCase().includes(lower) ||
+    n.headlineEn?.toLowerCase().includes(lower)
+  )
 }
 
 // ---------- DRAFTS (journalist submissions, pre-approval) ----------
@@ -68,14 +83,22 @@ export async function createDraft(draft) {
   return ref.id
 }
 
-export function listenToMyDrafts(authorId, callback) {
-  const q = query(collection(db, 'drafts'), where('authorId', '==', authorId), orderBy('createdAt', 'desc'))
-  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+export function listenToMyDrafts(authorId, callback, onError) {
+  const q = query(collection(db, 'drafts'), where('authorId', '==', authorId))
+  return onSnapshot(
+    q,
+    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+    (err) => { console.error('listenToMyDrafts failed:', err); onError?.(err); callback([]) }
+  )
 }
 
-export function listenToPendingDrafts(callback) {
-  const q = query(collection(db, 'drafts'), where('status', '==', 'pending'), orderBy('createdAt', 'asc'))
-  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+export function listenToPendingDrafts(callback, onError) {
+  const q = query(collection(db, 'drafts'), where('status', '==', 'pending'))
+  return onSnapshot(
+    q,
+    (snap) => callback(sortByCreatedAtAsc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+    (err) => { console.error('listenToPendingDrafts failed:', err); onError?.(err); callback([]) }
+  )
 }
 
 export async function updateDraft(id, data) {

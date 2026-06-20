@@ -9,10 +9,11 @@ export default function JournalistDashboard() {
   const navigate = useNavigate()
   const [drafts, setDrafts] = useState(null)
   const [filter, setFilter] = useState('all')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
-    const unsub = listenToMyDrafts(user.uid, setDrafts)
+    const unsub = listenToMyDrafts(user.uid, setDrafts, (err) => setError(err.message || 'Could not load your reports.'))
     return unsub
   }, [user])
 
@@ -54,8 +55,14 @@ export default function JournalistDashboard() {
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 10 }}>
-        {drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
-        {drafts && filtered.length === 0 && (
+        {error && (
+          <div className="nf-empty" style={{ color: 'var(--nf-danger)' }}>
+            <p style={{ fontWeight: 700 }}>Couldn't load your reports</p>
+            <p style={{ fontSize: 13, marginTop: 4 }}>{error}</p>
+          </div>
+        )}
+        {!error && drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
+        {!error && drafts && filtered.length === 0 && (
           <div className="nf-empty">
             <p style={{ fontWeight: 700, color: 'var(--nf-navy)' }}>No reports here</p>
             <p style={{ fontSize: 13.5, marginTop: 4 }}>Tap "Submit News" to file your first report.</p>

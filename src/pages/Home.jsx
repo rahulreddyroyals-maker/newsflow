@@ -13,6 +13,7 @@ export default function Home() {
   const [category, setCategory] = useState('All')
   const [news, setNews] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [feedError, setFeedError] = useState('')
 
   useEffect(() => {
     if (profile?.district) setDistrict(profile.district)
@@ -20,7 +21,8 @@ export default function Home() {
 
   useEffect(() => {
     setNews(null)
-    const unsub = listenToFeed({ district, category }, setNews)
+    setFeedError('')
+    const unsub = listenToFeed({ district, category }, setNews, (err) => setFeedError(err.message || 'Could not load news.'))
     return unsub
   }, [district, category])
 
@@ -39,7 +41,14 @@ export default function Home() {
       <div className="nf-scroll-body">
         <CategoryTabs active={category} onChange={setCategory} />
 
-        {news === null && <FeedSkeleton />}
+        {news === null && !feedError && <FeedSkeleton />}
+
+        {feedError && (
+          <div className="nf-empty" style={{ color: 'var(--nf-danger)' }}>
+            <p style={{ fontWeight: 700 }}>Couldn't load news</p>
+            <p style={{ fontSize: 13, marginTop: 4 }}>{feedError}</p>
+          </div>
+        )}
 
         {news?.length === 0 && (
           <div className="nf-empty">

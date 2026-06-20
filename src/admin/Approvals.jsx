@@ -10,10 +10,11 @@ export default function Approvals() {
   const [drafts, setDrafts] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!isAdmin) return
-    const unsub = listenToPendingDrafts(setDrafts)
+    const unsub = listenToPendingDrafts(setDrafts, (err) => setError(err.message || 'Could not load pending drafts.'))
     return unsub
   }, [isAdmin])
 
@@ -42,8 +43,14 @@ export default function Approvals() {
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 16 }}>
-        {drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
-        {drafts?.length === 0 && (
+        {error && (
+          <div className="nf-empty" style={{ color: 'var(--nf-danger)' }}>
+            <p style={{ fontWeight: 700 }}>Couldn't load pending drafts</p>
+            <p style={{ fontSize: 13, marginTop: 4 }}>{error}</p>
+          </div>
+        )}
+        {!error && drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
+        {!error && drafts?.length === 0 && (
           <div className="nf-empty">
             <p style={{ fontWeight: 700, color: 'var(--nf-navy)' }}>All caught up</p>
             <p style={{ fontSize: 13.5, marginTop: 4 }}>No drafts waiting for review.</p>

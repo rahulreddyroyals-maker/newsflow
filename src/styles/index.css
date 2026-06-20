@@ -47,6 +47,8 @@
 html, body {
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow: hidden;
   background: var(--nf-paper-dim);
   color: var(--nf-ink);
   font-family: var(--nf-font-body);
@@ -62,10 +64,11 @@ body {
 #root {
   width: 100%;
   max-width: var(--nf-max-w);
-  min-height: 100vh;
+  height: 100%;
   background: var(--nf-paper-dim);
   position: relative;
   box-shadow: 0 0 60px rgba(15,31,61,0.06);
+  overflow: hidden;
 }
 
 h1, h2, h3, h4 {
@@ -109,15 +112,27 @@ img { display: block; max-width: 100%; }
 }
 
 .nf-screen {
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--nf-paper-dim);
+  overflow-y: auto; /* covers screens (Login, AdminLogin, Splash) that don't use
+                       a separate .nf-scroll-body — without this they'd clip
+                       instead of scroll on short viewports. Harmless when a
+                       child .nf-scroll-body also handles its own scrolling,
+                       since the child clips first and this never engages. */
+  -webkit-overflow-scrolling: touch;
 }
 
 .nf-scroll-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0; /* critical: without this, flex children refuse to shrink below
+                    their content size in a column flex container, so overflow
+                    never triggers and the whole page tries to grow instead of
+                    scrolling internally — this was the root cause of "scrolling
+                    not working." */
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding-bottom: calc(var(--nf-nav-h) + 12px);
 }
 
