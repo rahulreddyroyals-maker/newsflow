@@ -17,6 +17,7 @@ export default function NewsDetail() {
   const { lang } = useLanguage()
   const [news, setNews] = useState(null)
   const [imgIndex, setImgIndex] = useState(0)
+  const [shareCopied, setShareCopied] = useState(false)
 
   useEffect(() => {
     getNewsById(id).then(setNews)
@@ -40,8 +41,6 @@ export default function NewsDetail() {
     await toggleBookmark(user.uid, id, isBookmarked)
     refreshProfile()
   }
-
-  const [shareCopied, setShareCopied] = useState(false)
 
   function handleShare() {
     const shareData = { title: headline, text: news.summary, url: window.location.href }
