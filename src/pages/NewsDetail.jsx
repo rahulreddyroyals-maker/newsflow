@@ -41,10 +41,17 @@ export default function NewsDetail() {
     refreshProfile()
   }
 
+  const [shareCopied, setShareCopied] = useState(false)
+
   function handleShare() {
     const shareData = { title: headline, text: news.summary, url: window.location.href }
-    if (navigator.share) navigator.share(shareData).catch(() => {})
-    else navigator.clipboard.writeText(window.location.href)
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {})
+    } else {
+      navigator.clipboard.writeText(window.location.href)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 1600)
+    }
   }
 
   return (
@@ -81,7 +88,7 @@ export default function NewsDetail() {
         <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content}</p>
 
         <div style={actionRowStyle}>
-          <button className="nf-btn nf-btn-ghost" onClick={handleShare} style={{ flex: 1 }}>📤 Share</button>
+          <button className="nf-btn nf-btn-ghost" onClick={handleShare} style={{ flex: 1 }}>📤 {shareCopied ? 'Link copied!' : 'Share'}</button>
           <button className="nf-btn nf-btn-ghost" onClick={handleBookmark} style={{ flex: 1, color: isBookmarked ? 'var(--nf-orange)' : 'var(--nf-navy)' }}>
             {isBookmarked ? '★ Saved' : '☆ Save'}
           </button>

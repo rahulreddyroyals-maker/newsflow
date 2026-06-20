@@ -32,7 +32,7 @@ export const RSS_FEEDS = [
 // Optional: NewsData.io free tier (https://newsdata.io) — sign up for a free API key,
 // set NEWSDATA_API_KEY as a GitHub Actions secret, and this query pulls India/Telugu news.
 export const NEWSDATA_QUERY = {
-  enabled: false, // flip to true once you've added a NEWSDATA_API_KEY secret
+  enabled: true, // safe to leave on — it's a no-op until you add a NEWSDATA_API_KEY secret
   baseUrl: 'https://newsdata.io/api/1/news',
   params: { country: 'in', language: 'te', category: 'top' }
 }

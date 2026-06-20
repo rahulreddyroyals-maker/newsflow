@@ -133,7 +133,7 @@ img { display: block; max-width: 100%; }
                     not working." */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(var(--nf-nav-h) + 12px);
+  padding-bottom: calc(var(--nf-nav-h) + 24px);
 }
 
 .nf-container {

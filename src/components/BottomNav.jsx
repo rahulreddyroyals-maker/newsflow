@@ -37,8 +37,11 @@ export default function BottomNav() {
       : { to: '/journalist', label: isJournalist ? 'Reports' : t('profile', lang), Icon: isJournalist ? PenIcon : UserIcon }
   ]
 
-  // Hide nav on auth/splash/detail-style full screens
-  if (['/', '/login', '/register', '/admin-login'].includes(location.pathname)) return null
+  // Hide nav on auth/splash screens and on focused task flows that have
+  // their own back-button header and bottom action buttons — showing the
+  // nav there pushed those buttons under it.
+  const hiddenRoutes = ['/', '/login', '/register', '/admin-login', '/journalist/submit', '/journalist/preview']
+  if (hiddenRoutes.includes(location.pathname)) return null
 
   return (
     <nav style={navStyle}>

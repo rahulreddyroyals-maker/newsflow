@@ -8,8 +8,11 @@ const BellIcon = (p) => (
 const SearchIcon = (p) => (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" {...p}><circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2"/><path d="M20 20l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
 )
+const ReelsIcon = (p) => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" {...p}><rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="2"/><path d="M9 9.5v5l4.5-2.5L9 9.5Z" fill="currentColor"/></svg>
+)
 
-export default function Header({ district, onDistrictTap, hasNotifications }) {
+export default function Header({ district, onDistrictTap, onReelsTap, hasNotifications }) {
   const navigate = useNavigate()
   const { lang, toggleLang } = useLanguage()
 
@@ -30,6 +33,11 @@ export default function Header({ district, onDistrictTap, hasNotifications }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={toggleLang} style={langBtnStyle}>{lang === 'te' ? 'EN' : 'తె'}</button>
+        {onReelsTap && (
+          <button onClick={onReelsTap} style={iconBtnStyle} aria-label="Reels view">
+            <ReelsIcon style={{ color: 'var(--nf-navy)' }} />
+          </button>
+        )}
         <button onClick={() => navigate('/search')} style={iconBtnStyle} aria-label="Search">
           <SearchIcon style={{ color: 'var(--nf-navy)' }} />
         </button>
