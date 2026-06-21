@@ -5,7 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../utils/categories'
 import { ALL_DISTRICTS } from '../utils/districts'
 import { generateNewsDraft, transcribeVoiceNote } from '../services/groq'
-import { uploadImage, uploadAudio } from '../services/newsService'
+import { uploadImage, uploadAudio, uploadVideo } from '../services/newsService'
+import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 export default function SubmitNews() {
   const { profile } = useAuth()
@@ -14,6 +15,8 @@ export default function SubmitNews() {
   const [district, setDistrict] = useState(profile?.district || '')
   const [text, setText] = useState('')
   const [images, setImages] = useState([])
+  const [videoFile, setVideoFile] = useState(null)
+  const [videoError, setVideoError] = useState('')
   const [audioBlob, setAudioBlob] = useState(null)
   const [recording, setRecording] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -64,6 +67,19 @@ export default function SubmitNews() {
     setImages(files)
   }
 
+  async function handleVideoPick(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setVideoError('')
+    const result = await validateVideoFile(file)
+    if (!result.valid) {
+      setVideoError(result.error)
+      e.target.value = ''
+      return
+    }
+    setVideoFile(file)
+  }
+
   async function handleGenerateDraft() {
     setError('')
     if (!category || !district) return setError('Please select category and district first.')
@@ -85,6 +101,12 @@ export default function SubmitNews() {
         imageUrls.push(await uploadImage(file))
       }
 
+      let videoUrl = null
+      if (videoFile) {
+        setBusyLabel('Uploading video…')
+        videoUrl = await uploadVideo(videoFile)
+      }
+
       let audioUrl = null
       if (audioBlob) {
         setBusyLabel('Uploading voice note…')
@@ -102,6 +124,7 @@ export default function SubmitNews() {
           category,
           district,
           images: imageUrls,
+          videoUrl,
           audioUrl,
           language: profile?.language || 'te'
         }
@@ -166,6 +189,24 @@ export default function SubmitNews() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="nf-input-group">
+          <label className="nf-label">Upload video (optional, max {MAX_VIDEO_SECONDS}s)</label>
+          {!videoFile ? (
+            <>
+              <input type="file" accept="video/*" onChange={handleVideoPick} />
+              <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 6 }}>
+                Tip: record at lower resolution if your phone allows it — shorter, smaller clips upload faster and use less data for readers too.
+              </p>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <video controls src={URL.createObjectURL(videoFile)} style={{ flex: 1, maxHeight: 160, borderRadius: 8 }} />
+              <button type="button" className="nf-btn nf-btn-ghost" onClick={() => setVideoFile(null)}>Remove</button>
+            </div>
+          )}
+          {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12.5, marginTop: 6 }}>{videoError}</p>}
         </div>
 
         <div className="nf-input-group">

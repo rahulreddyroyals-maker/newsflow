@@ -64,6 +64,7 @@ export default function AIDraftPreview() {
         category: draft.category,
         district: draft.district,
         images: draft.images || [],
+        videoUrl: draft.videoUrl || null,
         audioUrl: draft.audioUrl || null,
         rawText: draft.rawText || '',
         authorId: user.uid,

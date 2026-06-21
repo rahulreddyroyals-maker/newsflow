@@ -34,6 +34,7 @@ export function BigNewsCard({ news, onOpen }) {
           <div style={{ ...placeholderStyle, borderRadius: 'var(--nf-radius-md) var(--nf-radius-md) 0 0' }} />
         )}
         <ImageWatermark size="lg" />
+        {news.videoUrl && <PlayBadge size="lg" />}
         <div style={overlayStyle}>
           <span className="nf-chip" style={{ background: 'rgba(255,255,255,0.16)', borderColor: 'transparent', color: '#fff', marginBottom: 8 }}>
             {categoryLabel(news.category, lang)}
@@ -60,12 +61,13 @@ export function CompactNewsCard({ news, onOpen }) {
 
   return (
     <button onClick={() => (onOpen ? onOpen(news) : navigate(`/news/${news.id}`))} style={compactCardStyle}>
-      <div style={{ width: 92, height: 92, flexShrink: 0 }}>
+      <div style={{ width: 92, height: 92, flexShrink: 0, position: 'relative' }}>
         {news.images?.[0] ? (
           <img src={news.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--nf-radius-sm)' }} />
         ) : (
           <div style={{ ...placeholderStyle, borderRadius: 'var(--nf-radius-sm)', width: '100%', height: '100%' }} />
         )}
+        {news.videoUrl && <PlayBadge size="sm" />}
       </div>
       <div style={{ flex: 1, textAlign: 'left' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--nf-orange)', textTransform: 'uppercase' }}>
@@ -79,6 +81,40 @@ export function CompactNewsCard({ news, onOpen }) {
         </div>
       </div>
     </button>
+  )
+}
+
+function PlayBadge({ size }) {
+  const isLg = size === 'lg'
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1,
+      pointerEvents: 'none'
+    }}>
+      <div style={{
+        width: isLg ? 48 : 30,
+        height: isLg ? 48 : 30,
+        borderRadius: '50%',
+        background: 'rgba(15,31,61,0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          width: 0,
+          height: 0,
+          borderTop: `${isLg ? 9 : 6}px solid transparent`,
+          borderBottom: `${isLg ? 9 : 6}px solid transparent`,
+          borderLeft: `${isLg ? 14 : 9}px solid #fff`,
+          marginLeft: 2
+        }} />
+      </div>
+    </div>
   )
 }
 

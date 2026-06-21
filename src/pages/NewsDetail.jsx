@@ -60,7 +60,9 @@ export default function NewsDetail() {
   return (
     <div className="nf-screen">
       <div style={{ position: 'relative' }}>
-        {news.images?.length ? (
+        {news.videoUrl ? (
+          <video controls src={news.videoUrl} poster={news.images?.[0]} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', background: '#000' }} />
+        ) : news.images?.length ? (
           <>
             <img src={news.images[imgIndex]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover' }} />
             {news.images.length > 1 && (
@@ -86,6 +88,12 @@ export default function NewsDetail() {
         </div>
         {shareCopied && <div style={toastStyle}>Link copied!</div>}
       </div>
+
+      {news.videoUrl && news.images?.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0', overflowX: 'auto' }}>
+          {news.images.map((url, i) => <img key={i} src={url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />)}
+        </div>
+      )}
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
         <span className="nf-chip active" style={{ marginBottom: 12 }}>{categoryLabel(news.category, lang)}</span>

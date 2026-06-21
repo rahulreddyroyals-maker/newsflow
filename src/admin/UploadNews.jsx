@@ -5,7 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../utils/categories'
 import { ALL_DISTRICTS } from '../utils/districts'
 import { generateNewsDraft, translateDraft } from '../services/groq'
-import { uploadImage, publishNewsDirectly } from '../services/newsService'
+import { uploadImage, uploadVideo, publishNewsDirectly } from '../services/newsService'
+import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 // Lets an admin publish a story directly — no approval step, since the admin
 // IS the approver. Same AI-assist as the journalist flow (optional: admin
@@ -17,6 +18,8 @@ export default function UploadNews() {
   const [category, setCategory] = useState('')
   const [district, setDistrict] = useState('')
   const [images, setImages] = useState([])
+  const [videoFile, setVideoFile] = useState(null)
+  const [videoError, setVideoError] = useState('')
   const [rawText, setRawText] = useState('')
   const [draft, setDraft] = useState({ headline: '', headlineEn: '', summary: '', summaryEn: '', article: '', articleEn: '' })
   const [busy, setBusy] = useState(false)
@@ -29,6 +32,19 @@ export default function UploadNews() {
 
   function updateDraftField(field, value) {
     setDraft((d) => ({ ...d, [field]: value }))
+  }
+
+  async function handleVideoPick(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setVideoError('')
+    const result = await validateVideoFile(file)
+    if (!result.valid) {
+      setVideoError(result.error)
+      e.target.value = ''
+      return
+    }
+    setVideoFile(file)
   }
 
   async function handleGenerateDraft() {
@@ -71,8 +87,14 @@ export default function UploadNews() {
       const imageUrls = []
       for (const file of images) imageUrls.push(await uploadImage(file))
 
+      let videoUrl = null
+      if (videoFile) {
+        setBusyLabel('Uploading video…')
+        videoUrl = await uploadVideo(videoFile)
+      }
+
       setBusyLabel('Publishing…')
-      await publishNewsDirectly({ ...draft, category, district, images: imageUrls })
+      await publishNewsDirectly({ ...draft, category, district, images: imageUrls, videoUrl })
       navigate('/admin', { replace: true })
     } catch (err) {
       setError('Could not publish: ' + err.message)
@@ -112,6 +134,19 @@ export default function UploadNews() {
               {images.map((f, i) => <img key={i} src={URL.createObjectURL(f)} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />)}
             </div>
           )}
+        </div>
+
+        <div className="nf-input-group">
+          <label className="nf-label">Video (optional, max {MAX_VIDEO_SECONDS}s)</label>
+          {!videoFile ? (
+            <input type="file" accept="video/*" onChange={handleVideoPick} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <video controls src={URL.createObjectURL(videoFile)} style={{ flex: 1, maxHeight: 160, borderRadius: 8 }} />
+              <button type="button" className="nf-btn nf-btn-ghost" onClick={() => setVideoFile(null)}>Remove</button>
+            </div>
+          )}
+          {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12.5, marginTop: 6 }}>{videoError}</p>}
         </div>
 
         <div className="nf-input-group">

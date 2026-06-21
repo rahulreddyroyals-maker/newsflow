@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listAllNews, updateNews, deleteNews, uploadImage } from '../services/newsService'
+import { listAllNews, updateNews, deleteNews, uploadImage, uploadVideo } from '../services/newsService'
+import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 // Lets an admin fix anything already live — wording, category/district, the
 // byline (useful for cleaning up older RSS items that still say "RSS · X"
@@ -15,6 +16,7 @@ export default function ManageNews() {
   const [editingId, setEditingId] = useState(null)
   const [edits, setEdits] = useState({})
   const [busyId, setBusyId] = useState(null)
+  const [videoError, setVideoError] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -28,13 +30,23 @@ export default function ManageNews() {
 
   function startEdit(item) {
     setEditingId(item.id)
-    setEdits({ headline: item.headline, summary: item.summary, content: item.content, authorName: item.authorName, images: item.images || [] })
+    setEdits({ headline: item.headline, summary: item.summary, content: item.content, authorName: item.authorName, images: item.images || [], videoUrl: item.videoUrl || null })
   }
 
   async function handleImageReplace(file) {
     setBusyId(editingId)
     const url = await uploadImage(file)
     setEdits((x) => ({ ...x, images: [url, ...(x.images || []).slice(1)] }))
+    setBusyId(null)
+  }
+
+  async function handleVideoReplace(file) {
+    setVideoError('')
+    const result = await validateVideoFile(file)
+    if (!result.valid) return setVideoError(result.error)
+    setBusyId(editingId)
+    const url = await uploadVideo(file)
+    setEdits((x) => ({ ...x, videoUrl: url }))
     setBusyId(null)
   }
 
@@ -80,6 +92,16 @@ export default function ManageNews() {
                   <label className="nf-label">Replace photo</label>
                   <input type="file" accept="image/*" onChange={(e) => e.target.files[0] && handleImageReplace(e.target.files[0])} style={{ marginBottom: 12 }} />
 
+                  {edits.videoUrl && (
+                    <>
+                      <video controls src={edits.videoUrl} style={{ width: '100%', maxHeight: 160, borderRadius: 8, marginBottom: 8 }} />
+                      <button type="button" className="nf-btn nf-btn-ghost" style={{ marginBottom: 8 }} onClick={() => setEdits((x) => ({ ...x, videoUrl: null }))}>Remove video</button>
+                    </>
+                  )}
+                  <label className="nf-label">{edits.videoUrl ? 'Replace video' : `Add video (max ${MAX_VIDEO_SECONDS}s)`}</label>
+                  <input type="file" accept="video/*" onChange={(e) => e.target.files[0] && handleVideoReplace(e.target.files[0])} style={{ marginBottom: 6 }} />
+                  {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12, marginBottom: 10 }}>{videoError}</p>}
+
                   <label className="nf-label">Byline</label>
                   <input className="nf-input" value={edits.authorName} onChange={(e) => setEdits((x) => ({ ...x, authorName: e.target.value }))} style={{ marginBottom: 10 }} />
 
@@ -102,7 +124,7 @@ export default function ManageNews() {
               ) : (
                 <>
                   {item.images?.[0] && <img src={item.images[0]} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
-                  <h3 style={{ fontSize: 15, lineHeight: 1.35 }}>{item.headline}</h3>
+                  <h3 style={{ fontSize: 15, lineHeight: 1.35 }}>{item.headline} {item.videoUrl && '🎬'}</h3>
                   <p style={{ fontSize: 12.5, color: 'var(--nf-ink-faint)', margin: '6px 0 12px' }}>{item.district} • {item.category} • by {item.authorName}</p>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button className="nf-btn nf-btn-ghost" style={{ flex: 1 }} onClick={() => startEdit(item)}>✎ Edit</button>

@@ -87,7 +87,9 @@ function ReelSlide({ news }) {
   return (
     <section ref={slideRef} style={slideStyle}>
       <div style={mediaWrapStyle}>
-        {news.images?.[0] ? (
+        {news.videoUrl ? (
+          <video controls src={news.videoUrl} poster={news.images?.[0]} style={bgImageStyle} />
+        ) : news.images?.[0] ? (
           <img src={news.images[0]} alt="" style={bgImageStyle} />
         ) : (
           <div style={{ ...bgImageStyle, background: 'var(--nf-flow)', opacity: 0.5 }} />

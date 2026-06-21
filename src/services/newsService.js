@@ -118,6 +118,7 @@ export async function approveDraft(draftEntry) {
     category: rest.category,
     district: rest.district,
     images: rest.images || [],
+    videoUrl: rest.videoUrl || null,
     audioUrl: rest.audioUrl || null,
     authorId: rest.authorId,
     authorName: rest.authorName || 'NewsFlow Reporter',
@@ -144,6 +145,17 @@ export async function uploadAudio(blob, pathPrefix = 'news_audio') {
   const path = `${pathPrefix}/${Date.now()}_voice.webm`
   const storageRef = ref(storage, path)
   await uploadBytes(storageRef, blob)
+  return getDownloadURL(storageRef)
+}
+
+// Videos are capped at 90 seconds and a hard file-size ceiling (enforced
+// client-side before upload, and again in storage.rules server-side) — short
+// clips keep this usable on Firebase's free Storage tier (5GB total, 1GB/day
+// downloads) for as long as possible before an upgrade is needed.
+export async function uploadVideo(file, pathPrefix = 'news_videos') {
+  const path = `${pathPrefix}/${Date.now()}_${file.name || 'video.webm'}`
+  const storageRef = ref(storage, path)
+  await uploadBytes(storageRef, file)
   return getDownloadURL(storageRef)
 }
 
@@ -188,6 +200,7 @@ export async function publishNewsDirectly(data) {
     category: data.category,
     district: data.district,
     images: data.images || [],
+    videoUrl: data.videoUrl || null,
     audioUrl: data.audioUrl || null,
     authorId: 'admin',
     authorName: 'NewsFlow',

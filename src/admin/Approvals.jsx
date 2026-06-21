@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage } from '../services/newsService'
+import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage, uploadVideo } from '../services/newsService'
+import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 export default function Approvals() {
   const { isAdmin } = useAuth()
@@ -12,6 +13,7 @@ export default function Approvals() {
   const [expandedId, setExpandedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [edits, setEdits] = useState({})
+  const [videoError, setVideoError] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -27,13 +29,23 @@ export default function Approvals() {
   function startEdit(d) {
     setEditingId(d.id)
     setExpandedId(d.id) // editing implies seeing the full article
-    setEdits({ headline: d.headline, summary: d.summary, article: d.article, images: d.images || [] })
+    setEdits({ headline: d.headline, summary: d.summary, article: d.article, images: d.images || [], videoUrl: d.videoUrl || null })
   }
 
   async function handleImageReplace(file) {
     setBusyId(editingId)
     const url = await uploadImage(file)
     setEdits((x) => ({ ...x, images: [url, ...(x.images || []).slice(1)] }))
+    setBusyId(null)
+  }
+
+  async function handleVideoReplace(file) {
+    setVideoError('')
+    const result = await validateVideoFile(file)
+    if (!result.valid) return setVideoError(result.error)
+    setBusyId(editingId)
+    const url = await uploadVideo(file)
+    setEdits((x) => ({ ...x, videoUrl: url }))
     setBusyId(null)
   }
 
@@ -89,12 +101,23 @@ export default function Approvals() {
           return (
             <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 12 }}>
               {d.images?.[0] && !editing && <img src={d.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+              {d.videoUrl && !editing && <video controls src={d.videoUrl} style={{ width: '100%', maxHeight: 160, borderRadius: 8, marginBottom: 10 }} />}
 
               {editing && (
                 <>
                   {edits.images?.[0] && <img src={edits.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }} />}
                   <label className="nf-label">Replace photo</label>
                   <input type="file" accept="image/*" onChange={(e) => e.target.files[0] && handleImageReplace(e.target.files[0])} style={{ marginBottom: 10 }} />
+
+                  {edits.videoUrl && (
+                    <>
+                      <video controls src={edits.videoUrl} style={{ width: '100%', maxHeight: 160, borderRadius: 8, marginBottom: 8 }} />
+                      <button type="button" className="nf-btn nf-btn-ghost" style={{ marginBottom: 8 }} onClick={() => setEdits((x) => ({ ...x, videoUrl: null }))}>Remove video</button>
+                    </>
+                  )}
+                  <label className="nf-label">{edits.videoUrl ? 'Replace video' : `Add video (max ${MAX_VIDEO_SECONDS}s)`}</label>
+                  <input type="file" accept="video/*" onChange={(e) => e.target.files[0] && handleVideoReplace(e.target.files[0])} style={{ marginBottom: 6 }} />
+                  {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12, marginBottom: 10 }}>{videoError}</p>}
                 </>
               )}
 
