@@ -20,4 +20,15 @@ export const DISTRICTS = {
   ]
 }
 
-export const ALL_DISTRICTS = Object.values(DISTRICTS).flat()
+// Not every story is tied to one district — sports, cinema, state govt
+// announcements, or world news need a broader tag. These appear alongside
+// specific districts in submission forms, and as quick-pick filters in the
+// reader's location selector.
+export const SCOPES = ['Andhra Pradesh (statewide)', 'Telangana (statewide)', 'National', 'World']
+
+// Used in submission forms (journalist/admin pick one option from this full list).
+export const ALL_DISTRICTS = [...SCOPES, ...Object.values(DISTRICTS).flat()]
+
+// Used by the reader-facing district selector, which groups specific
+// districts by state but shows broader scopes as their own quick-pick row.
+export const ALL_SPECIFIC_DISTRICTS = Object.values(DISTRICTS).flat()

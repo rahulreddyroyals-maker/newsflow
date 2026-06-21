@@ -1,5 +1,7 @@
 // src/components/DistrictSelector.jsx
-import { DISTRICTS } from '../utils/districts'
+import { DISTRICTS, SCOPES } from '../utils/districts'
+
+const SCOPE_ICONS = { 'Andhra Pradesh (statewide)': '🟧', 'Telangana (statewide)': '🟦', National: '🇮🇳', World: '🌍' }
 
 export default function DistrictSelector({ open, current, onSelect, onClose }) {
   if (!open) return null
@@ -15,6 +17,16 @@ export default function DistrictSelector({ open, current, onSelect, onClose }) {
         >
           🌐 All districts
         </button>
+
+        <div style={{ marginTop: 14 }}>
+          <div style={stateLabelStyle}>Beyond local</div>
+          {SCOPES.map((s) => (
+            <button key={s} onClick={() => onSelect(s)} style={rowStyle(current === s)}>
+              {SCOPE_ICONS[s] || '📍'} {s}
+            </button>
+          ))}
+        </div>
+
         {Object.entries(DISTRICTS).map(([state, list]) => (
           <div key={state} style={{ marginTop: 14 }}>
             <div style={stateLabelStyle}>{state}</div>

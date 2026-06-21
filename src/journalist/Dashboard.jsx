@@ -71,7 +71,7 @@ export default function JournalistDashboard() {
           <div>
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-navy)' }}>Show my name on published reports</p>
             <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 2 }}>
-              {showName ? `Readers will see "${profile?.name || 'your name'}"` : 'Readers will see "NewsFlow Citizen Journalist" instead'}
+              {showName ? `New reports default to showing "${profile?.name || 'your name'}"` : 'New reports default to "NewsFlow Citizen Journalist"'} — you can still flip it per report when submitting.
             </p>
           </div>
           <Toggle checked={showName} onChange={toggleShowName} disabled={savingNameToggle} />

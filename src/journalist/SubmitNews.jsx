@@ -22,6 +22,7 @@ export default function SubmitNews() {
   const [busy, setBusy] = useState(false)
   const [busyLabel, setBusyLabel] = useState('')
   const [error, setError] = useState('')
+  const [showNameThisPost, setShowNameThisPost] = useState(profile?.displayNamePublicly !== false)
 
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -88,11 +89,19 @@ export default function SubmitNews() {
     setBusy(true)
     try {
       let rawText = text.trim()
+      let transcriptionWarning = ''
 
       if (audioBlob) {
         setBusyLabel('Transcribing voice note…')
-        const transcript = await transcribeVoiceNote(audioBlob, profile?.language === 'en' ? 'en' : 'te')
-        rawText = [rawText, transcript].filter(Boolean).join('\n\n')
+        try {
+          const transcript = await transcribeVoiceNote(audioBlob, profile?.language === 'en' ? 'en' : 'te')
+          rawText = [rawText, transcript].filter(Boolean).join('\n\n')
+        } catch (err) {
+          transcriptionWarning = 'Voice transcription failed, continuing with your typed notes only. '
+          if (!rawText) {
+            throw new Error('Voice transcription failed and there are no typed notes to fall back on. Please type a few lines about the report, or try recording again.')
+          }
+        }
       }
 
       setBusyLabel('Uploading photos…')
@@ -120,6 +129,8 @@ export default function SubmitNews() {
       navigate('/journalist/preview', {
         state: {
           ...draft,
+          transcriptionWarning,
+          showNameThisPost,
           rawText,
           category,
           district,
@@ -210,6 +221,18 @@ export default function SubmitNews() {
         </div>
 
         <div className="nf-input-group">
+          <div style={nameToggleRowStyle}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-navy)' }}>Show my name on this report</p>
+              <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 2 }}>
+                {showNameThisPost ? `Readers will see "${profile?.name || 'your name'}" on this one` : 'Readers will see "NewsFlow Citizen Journalist" on this one'}
+              </p>
+            </div>
+            <Toggle checked={showNameThisPost} onChange={() => setShowNameThisPost((v) => !v)} />
+          </div>
+        </div>
+
+        <div className="nf-input-group">
           <label className="nf-label">Write your report notes</label>
           <textarea
             className="nf-textarea"
@@ -227,4 +250,36 @@ export default function SubmitNews() {
       </div>
     </div>
   )
+}
+
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button
+      onClick={onChange}
+      disabled={disabled}
+      type="button"
+      style={{
+        width: 42, height: 24, borderRadius: 999, border: 'none', flexShrink: 0,
+        background: checked ? 'var(--nf-navy)' : 'var(--nf-line)',
+        position: 'relative', transition: 'background .15s ease'
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3,
+        width: 18, height: 18, borderRadius: '50%', background: '#fff',
+        transition: 'left .15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+      }} />
+    </button>
+  )
+}
+
+const nameToggleRowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  background: 'var(--nf-paper)',
+  border: '1px solid var(--nf-line)',
+  borderRadius: 10,
+  padding: '12px 14px'
 }

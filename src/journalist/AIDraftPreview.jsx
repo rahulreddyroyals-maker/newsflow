@@ -68,7 +68,7 @@ export default function AIDraftPreview() {
         audioUrl: draft.audioUrl || null,
         rawText: draft.rawText || '',
         authorId: user.uid,
-        authorName: profile?.displayNamePublicly === false ? 'NewsFlow Citizen Journalist' : (profile?.name || 'NewsFlow Reporter')
+        authorName: draft.showNameThisPost === false ? 'NewsFlow Citizen Journalist' : (profile?.name || 'NewsFlow Reporter')
       })
       navigate('/journalist', { replace: true })
     } catch (err) {
@@ -86,6 +86,14 @@ export default function AIDraftPreview() {
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
+        {draft.transcriptionWarning && (
+          <div style={{ background: '#FFF1DD', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--nf-warning)', fontWeight: 600 }}>
+              ⚠ {draft.transcriptionWarning}Review the draft below carefully since it's based only on what you typed.
+            </p>
+          </div>
+        )}
+
         {draft.images?.length > 0 && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto' }}>
             {draft.images.map((url, i) => <img key={i} src={url} alt="" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />)}

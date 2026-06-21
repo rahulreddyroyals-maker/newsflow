@@ -82,11 +82,12 @@ export async function translateDraft({ headline, summary, article }, targetLangu
 }
 
 // Sends a recorded voice note (Blob) to Groq's hosted Whisper model and gets text back.
-export async function transcribeVoiceNote(audioBlob, language = 'te') {
+async function callTranscribe(audioBlob, { language, includeLanguage }) {
   const form = new FormData()
   form.append('file', audioBlob, 'voice-note.webm')
   form.append('model', TRANSCRIBE_MODEL)
-  if (language) form.append('language', language)
+  form.append('response_format', 'json')
+  if (includeLanguage && language) form.append('language', language)
 
   const res = await fetch(`${GROQ_BASE}/audio/transcriptions`, {
     method: 'POST',
@@ -99,6 +100,23 @@ export async function transcribeVoiceNote(audioBlob, language = 'te') {
   }
   const data = await res.json()
   return data.text || ''
+}
+
+// Groq's audio endpoint occasionally 500s on a request that's otherwise
+// fine — sometimes tied to the `language` hint on short/quiet clips, other
+// times just a transient backend hiccup. One automatic retry (without the
+// language hint, letting Whisper auto-detect) recovers most of these
+// without bothering the journalist with a manual retry.
+export async function transcribeVoiceNote(audioBlob, language = 'te') {
+  try {
+    return await callTranscribe(audioBlob, { language, includeLanguage: true })
+  } catch (firstErr) {
+    try {
+      return await callTranscribe(audioBlob, { language, includeLanguage: false })
+    } catch (secondErr) {
+      throw new Error(`Voice transcription failed twice. ${secondErr.message}`)
+    }
+  }
 }
 
 // Lightweight duplicate check: compares a new headline+summary against a list
