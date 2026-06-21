@@ -16,8 +16,9 @@ export default function ImageWatermark({ size = 'sm' }) {
 
 const wrapStyle = {
   position: 'absolute',
-  left: 10,
-  bottom: 10,
+  top: 10,
+  left: '50%',
+  transform: 'translateX(-50%)',
   zIndex: 2,
   display: 'flex',
   alignItems: 'center',

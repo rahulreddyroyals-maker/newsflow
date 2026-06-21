@@ -172,6 +172,10 @@ export async function setJournalistVerified(uid, verified) {
   await updateDoc(doc(db, 'users', uid), { verified })
 }
 
+export async function setJournalistSuspended(uid, suspended) {
+  await updateDoc(doc(db, 'users', uid), { suspended })
+}
+
 // ---------- ADMIN: direct upload + manage published news ----------
 export async function publishNewsDirectly(data) {
   const ref = await addDoc(collection(db, 'news'), {

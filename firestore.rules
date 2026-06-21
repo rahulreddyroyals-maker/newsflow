@@ -4,9 +4,10 @@ service cloud.firestore {
 
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function myRole() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function myRole() { return myProfile().role; }
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
-    function isJournalist() { return isSignedIn() && myRole() == 'journalist'; }
+    function isJournalist() { return isSignedIn() && myRole() == 'journalist' && myProfile().suspended != true; }
 
     // Public, read-only published news feed
     match /news/{newsId} {
@@ -18,7 +19,8 @@ service cloud.firestore {
     match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
     match /districts/{id} { allow read: if true; allow write: if isAdmin(); }
 
-    // Drafts: journalists create + read their own; admins read/manage all
+    // Drafts: journalists create + read their own (blocked entirely while
+    // suspended, via isJournalist() above); admins read/manage all
     match /drafts/{draftId} {
       allow create: if isJournalist() && request.resource.data.authorId == request.auth.uid;
       allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
@@ -27,12 +29,14 @@ service cloud.firestore {
     }
 
     // Users: anyone signed in can read public profile fields via app logic;
-    // a user can only write their own document. Role/verified changes by admin only.
+    // a user can write their own document EXCEPT the admin-controlled fields
+    // (role, verified, suspended) — those require admin, even for your own doc.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isOwner(uid);
       allow update: if isAdmin()
-                    || (isOwner(uid) && !('role' in request.resource.data.diff(resource.data).affectedKeys()));
+                    || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks', 'displayNamePublicly']));
     }
 
     match /notifications/{id} {

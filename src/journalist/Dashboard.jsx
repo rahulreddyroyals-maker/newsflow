@@ -2,14 +2,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToMyDrafts } from '../services/newsService'
+import { listenToMyDrafts, updateUserProfile } from '../services/newsService'
 
 export default function JournalistDashboard() {
-  const { user, profile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [drafts, setDrafts] = useState(null)
   const [filter, setFilter] = useState('all')
   const [error, setError] = useState('')
+  const [savingNameToggle, setSavingNameToggle] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -36,6 +37,15 @@ export default function JournalistDashboard() {
   }
 
   const filtered = drafts?.filter((d) => filter === 'all' || d.status === filter) || []
+  const showName = profile?.displayNamePublicly !== false // default true if unset
+  const suspended = profile?.suspended === true
+
+  async function toggleShowName() {
+    setSavingNameToggle(true)
+    await updateUserProfile(user.uid, { displayNamePublicly: !showName })
+    refreshProfile()
+    setSavingNameToggle(false)
+  }
 
   return (
     <div className="nf-screen">
@@ -47,6 +57,26 @@ export default function JournalistDashboard() {
           </div>
           {!profile?.verified && <span className="nf-badge nf-badge-pending">Verification pending</span>}
         </div>
+
+        {suspended && (
+          <div style={{ background: '#FBE7E5', borderRadius: 10, padding: 12, marginTop: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-danger)' }}>Your account is currently restricted</p>
+            <p style={{ fontSize: 12.5, color: 'var(--nf-danger)', marginTop: 4 }}>
+              An admin has paused your ability to submit new reports. Contact the NewsFlow team if you think this is a mistake.
+            </p>
+          </div>
+        )}
+
+        <div style={nameToggleRowStyle}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-navy)' }}>Show my name on published reports</p>
+            <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 2 }}>
+              {showName ? `Readers will see "${profile?.name || 'your name'}"` : 'Readers will see "NewsFlow Citizen Journalist" instead'}
+            </p>
+          </div>
+          <Toggle checked={showName} onChange={toggleShowName} disabled={savingNameToggle} />
+        </div>
+
         <div style={{ display: 'flex', gap: 8, margin: '16px 0 6px', overflowX: 'auto' }}>
           {['all', 'pending', 'approved', 'rejected'].map((f) => (
             <button key={f} className={`nf-chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)} style={{ textTransform: 'capitalize' }}>{f}</button>
@@ -82,9 +112,43 @@ export default function JournalistDashboard() {
         ))}
       </div>
 
-      <button className="nf-btn nf-btn-flow" style={fabStyle} onClick={() => navigate('/journalist/submit')}>+ Submit News</button>
+      {!suspended && (
+        <button className="nf-btn nf-btn-flow" style={fabStyle} onClick={() => navigate('/journalist/submit')}>+ Submit News</button>
+      )}
     </div>
   )
+}
+
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button
+      onClick={onChange}
+      disabled={disabled}
+      style={{
+        width: 42, height: 24, borderRadius: 999, border: 'none', flexShrink: 0,
+        background: checked ? 'var(--nf-navy)' : 'var(--nf-line)',
+        position: 'relative', transition: 'background .15s ease'
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3,
+        width: 18, height: 18, borderRadius: '50%', background: '#fff',
+        transition: 'left .15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+      }} />
+    </button>
+  )
+}
+
+const nameToggleRowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  background: 'var(--nf-paper)',
+  border: '1px solid var(--nf-line)',
+  borderRadius: 10,
+  padding: '12px 14px',
+  marginTop: 14
 }
 
 const fabStyle = {

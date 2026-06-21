@@ -23,6 +23,18 @@ export default function SubmitNews() {
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
 
+  if (profile?.suspended) {
+    return (
+      <div className="nf-screen" style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <p style={{ fontWeight: 700, color: 'var(--nf-danger)', marginBottom: 8 }}>Posting is currently restricted</p>
+        <p style={{ fontSize: 13.5, color: 'var(--nf-ink-soft)', textAlign: 'center' }}>
+          An admin has paused your ability to submit new reports. Contact the NewsFlow team if you think this is a mistake.
+        </p>
+        <button className="nf-btn nf-btn-ghost" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>Go back</button>
+      </div>
+    )
+  }
+
   async function startRecording() {
     setError('')
     try {

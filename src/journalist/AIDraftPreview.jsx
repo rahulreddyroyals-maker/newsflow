@@ -67,7 +67,7 @@ export default function AIDraftPreview() {
         audioUrl: draft.audioUrl || null,
         rawText: draft.rawText || '',
         authorId: user.uid,
-        authorName: profile?.name || 'NewsFlow Reporter'
+        authorName: profile?.displayNamePublicly === false ? 'NewsFlow Citizen Journalist' : (profile?.name || 'NewsFlow Reporter')
       })
       navigate('/journalist', { replace: true })
     } catch (err) {
