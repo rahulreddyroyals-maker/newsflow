@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft } from '../services/newsService'
+import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage } from '../services/newsService'
 
 export default function Approvals() {
   const { isAdmin } = useAuth()
@@ -27,7 +27,14 @@ export default function Approvals() {
   function startEdit(d) {
     setEditingId(d.id)
     setExpandedId(d.id) // editing implies seeing the full article
-    setEdits({ headline: d.headline, summary: d.summary, article: d.article })
+    setEdits({ headline: d.headline, summary: d.summary, article: d.article, images: d.images || [] })
+  }
+
+  async function handleImageReplace(file) {
+    setBusyId(editingId)
+    const url = await uploadImage(file)
+    setEdits((x) => ({ ...x, images: [url, ...(x.images || []).slice(1)] }))
+    setBusyId(null)
   }
 
   async function saveEdit(d) {
@@ -81,7 +88,15 @@ export default function Approvals() {
           const editing = editingId === d.id
           return (
             <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 12 }}>
-              {d.images?.[0] && <img src={d.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+              {d.images?.[0] && !editing && <img src={d.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+
+              {editing && (
+                <>
+                  {edits.images?.[0] && <img src={edits.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }} />}
+                  <label className="nf-label">Replace photo</label>
+                  <input type="file" accept="image/*" onChange={(e) => e.target.files[0] && handleImageReplace(e.target.files[0])} style={{ marginBottom: 10 }} />
+                </>
+              )}
 
               {editing ? (
                 <input
@@ -94,7 +109,9 @@ export default function Approvals() {
                 <h3 style={{ fontSize: 15.5, lineHeight: 1.35 }}>{d.headline}</h3>
               )}
 
-              <p style={{ fontSize: 12.5, color: 'var(--nf-ink-faint)', margin: '6px 0 10px' }}>{d.district} • {d.category} • by {d.authorName}</p>
+              <p style={{ fontSize: 12.5, color: 'var(--nf-ink-faint)', margin: '6px 0 10px' }}>
+                {d.district} • {d.category} • {d.sourceName ? `source: ${d.sourceName}` : `by ${d.authorName}`}
+              </p>
 
               {editing ? (
                 <textarea

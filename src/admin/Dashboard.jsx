@@ -44,6 +44,12 @@ export default function AdminDashboard() {
         <button className="nf-btn nf-btn-flow" style={{ gridColumn: 'span 2', marginTop: 6 }} onClick={() => navigate('/admin/approvals')}>
           Review Pending News →
         </button>
+        <button className="nf-btn nf-btn-primary" style={{ gridColumn: 'span 2' }} onClick={() => navigate('/admin/upload')}>
+          + Upload News Directly
+        </button>
+        <button className="nf-btn nf-btn-ghost" style={{ gridColumn: 'span 2' }} onClick={() => navigate('/admin/manage-news')}>
+          Edit Published News
+        </button>
       </div>
     </div>
   )

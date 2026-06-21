@@ -1,0 +1,169 @@
+// src/admin/UploadNews.jsx
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { CATEGORIES } from '../utils/categories'
+import { ALL_DISTRICTS } from '../utils/districts'
+import { generateNewsDraft, translateDraft } from '../services/groq'
+import { uploadImage, publishNewsDirectly } from '../services/newsService'
+
+// Lets an admin publish a story directly — no approval step, since the admin
+// IS the approver. Same AI-assist as the journalist flow (optional: admin
+// can also just type the final headline/summary/article by hand and skip
+// the AI draft step entirely).
+export default function UploadNews() {
+  const { isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const [category, setCategory] = useState('')
+  const [district, setDistrict] = useState('')
+  const [images, setImages] = useState([])
+  const [rawText, setRawText] = useState('')
+  const [draft, setDraft] = useState({ headline: '', headlineEn: '', summary: '', summaryEn: '', article: '', articleEn: '' })
+  const [busy, setBusy] = useState(false)
+  const [busyLabel, setBusyLabel] = useState('')
+  const [error, setError] = useState('')
+
+  if (!isAdmin) {
+    return <div className="nf-screen" style={{ alignItems: 'center', justifyContent: 'center' }}><p>Admins only</p></div>
+  }
+
+  function updateDraftField(field, value) {
+    setDraft((d) => ({ ...d, [field]: value }))
+  }
+
+  async function handleGenerateDraft() {
+    if (!rawText.trim()) return setError('Write or paste the report notes first.')
+    setError('')
+    setBusy(true)
+    setBusyLabel('Writing AI draft…')
+    try {
+      const generated = await generateNewsDraft({ rawText, language: 'Telugu', category, district })
+      setDraft((d) => ({ ...d, headline: generated.headline, summary: generated.summary, article: generated.article }))
+    } catch (err) {
+      setError('AI draft failed: ' + err.message)
+    } finally {
+      setBusy(false)
+      setBusyLabel('')
+    }
+  }
+
+  async function handleTranslate() {
+    setBusy(true)
+    setBusyLabel('Translating…')
+    try {
+      const translated = await translateDraft(draft, 'English')
+      setDraft((d) => ({ ...d, headlineEn: translated.headline, summaryEn: translated.summary, articleEn: translated.article }))
+    } catch (err) {
+      setError('Translation failed: ' + err.message)
+    } finally {
+      setBusy(false)
+      setBusyLabel('')
+    }
+  }
+
+  async function handlePublish() {
+    if (!category || !district) return setError('Select category and district.')
+    if (!draft.headline.trim() || !draft.article.trim()) return setError('Headline and article are required.')
+    setError('')
+    setBusy(true)
+    try {
+      setBusyLabel('Uploading photos…')
+      const imageUrls = []
+      for (const file of images) imageUrls.push(await uploadImage(file))
+
+      setBusyLabel('Publishing…')
+      await publishNewsDirectly({ ...draft, category, district, images: imageUrls })
+      navigate('/admin', { replace: true })
+    } catch (err) {
+      setError('Could not publish: ' + err.message)
+    } finally {
+      setBusy(false)
+      setBusyLabel('')
+    }
+  }
+
+  return (
+    <div className="nf-screen">
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--nf-line)', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--nf-paper)' }}>
+        <button onClick={() => navigate(-1)} style={{ border: 'none', background: 'none', fontSize: 20, color: 'var(--nf-navy)' }}>←</button>
+        <h2 style={{ fontSize: 17 }}>Upload News</h2>
+      </div>
+
+      <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
+        <div className="nf-input-group">
+          <label className="nf-label">Category</label>
+          <select className="nf-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">Select category</option>
+            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.en} / {c.te}</option>)}
+          </select>
+        </div>
+        <div className="nf-input-group">
+          <label className="nf-label">District</label>
+          <select className="nf-select" value={district} onChange={(e) => setDistrict(e.target.value)}>
+            <option value="">Select district</option>
+            {ALL_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <div className="nf-input-group">
+          <label className="nf-label">Photos</label>
+          <input type="file" accept="image/*" multiple onChange={(e) => setImages(Array.from(e.target.files || []).slice(0, 4))} />
+          {images.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {images.map((f, i) => <img key={i} src={URL.createObjectURL(f)} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />)}
+            </div>
+          )}
+        </div>
+
+        <div className="nf-input-group">
+          <label className="nf-label">Raw notes (for AI draft — optional if writing by hand below)</label>
+          <textarea className="nf-textarea" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste or type the report; AI will turn it into a headline, summary, and article." />
+        </div>
+        <button className="nf-btn nf-btn-flow nf-btn-block" disabled={busy} onClick={handleGenerateDraft} style={{ marginBottom: 20 }}>
+          {busy ? busyLabel || 'Working…' : '✨ Generate AI Draft'}
+        </button>
+
+        <div style={{ paddingTop: 6, borderTop: '1px dashed var(--nf-line)' }}>
+          <div className="nf-input-group">
+            <label className="nf-label">Headline</label>
+            <input className="nf-input" value={draft.headline} onChange={(e) => updateDraftField('headline', e.target.value)} />
+          </div>
+          <div className="nf-input-group">
+            <label className="nf-label">Summary</label>
+            <textarea className="nf-textarea" rows={2} value={draft.summary} onChange={(e) => updateDraftField('summary', e.target.value)} />
+          </div>
+          <div className="nf-input-group">
+            <label className="nf-label">Full article</label>
+            <textarea className="nf-textarea" rows={7} value={draft.article} onChange={(e) => updateDraftField('article', e.target.value)} />
+          </div>
+
+          {draft.headlineEn && (
+            <>
+              <div className="nf-input-group">
+                <label className="nf-label">Headline (EN)</label>
+                <input className="nf-input" value={draft.headlineEn} onChange={(e) => updateDraftField('headlineEn', e.target.value)} />
+              </div>
+              <div className="nf-input-group">
+                <label className="nf-label">Summary (EN)</label>
+                <textarea className="nf-textarea" rows={2} value={draft.summaryEn} onChange={(e) => updateDraftField('summaryEn', e.target.value)} />
+              </div>
+              <div className="nf-input-group">
+                <label className="nf-label">Article (EN)</label>
+                <textarea className="nf-textarea" rows={7} value={draft.articleEn} onChange={(e) => updateDraftField('articleEn', e.target.value)} />
+              </div>
+            </>
+          )}
+
+          <button className="nf-btn nf-btn-ghost nf-btn-block" disabled={busy} onClick={handleTranslate} style={{ marginBottom: 12 }}>
+            🌐 {draft.headlineEn ? 'Re-translate to English' : 'Add English translation'}
+          </button>
+        </div>
+
+        {error && <p style={{ color: 'var(--nf-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+        <button className="nf-btn nf-btn-primary nf-btn-block" disabled={busy} onClick={handlePublish} style={{ marginBottom: 30 }}>
+          {busy ? busyLabel || 'Working…' : 'Publish Now'}
+        </button>
+      </div>
+    </div>
+  )
+}

@@ -1,13 +1,12 @@
 // src/pages/Home.jsx
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import CategoryTabs from '../components/CategoryTabs'
 import DistrictSelector from '../components/DistrictSelector'
 import { BigNewsCard, CompactNewsCard } from '../components/NewsCard'
+import ReelsFeed from '../components/ReelsFeed'
 import { listenToFeed, updateUserProfile } from '../services/newsService'
 import { useAuth } from '../contexts/AuthContext'
-import ReelsFeed from '../components/ReelsFeed'
 
 const DISTRICT_KEY = 'nf_selected_district'
 
@@ -36,13 +35,12 @@ function withLocalFirst(items, homeDistrict) {
 
 export default function Home() {
   const { profile, user, refreshProfile } = useAuth()
-  const navigate = useNavigate()
   const [district, setDistrict] = useState(() => getInitialDistrict(profile))
   const [category, setCategory] = useState('All')
   const [news, setNews] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [feedError, setFeedError] = useState('')
-  const [reelsOpen, setReelsOpen] = useState(false)
+  const [reelsIndex, setReelsIndex] = useState(null) // null = closed; number = open at that story
 
   // Only adopt the profile's district as a default the FIRST time we ever
   // learn it (e.g. right after login, before any manual selection exists).
@@ -71,9 +69,17 @@ export default function Home() {
 
   const displayedNews = news && district === 'All' ? withLocalFirst(news, profile?.district) : news
 
+  // Tapping ANY story opens the swipeable reels view at that story — this is
+  // now the default reading experience, not a hidden alternate mode. Scroll
+  // up/down to move between stories without leaving the swipe flow.
+  function openReelsAt(tappedNews) {
+    const index = displayedNews.findIndex((n) => n.id === tappedNews.id)
+    setReelsIndex(index >= 0 ? index : 0)
+  }
+
   return (
     <div className="nf-screen">
-      <Header district={district} onDistrictTap={() => setPickerOpen(true)} onReelsTap={() => setReelsOpen(true)} />
+      <Header district={district} onDistrictTap={() => setPickerOpen(true)} onReelsTap={() => setReelsIndex(0)} />
       <div className="nf-scroll-body">
         <CategoryTabs active={category} onChange={setCategory} />
 
@@ -95,16 +101,16 @@ export default function Home() {
 
         {displayedNews && displayedNews.length > 0 && (
           <div className="nf-container" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <BigNewsCard news={displayedNews[0]} />
-            {displayedNews.slice(1).map((n) => <CompactNewsCard key={n.id} news={n} />)}
+            <BigNewsCard news={displayedNews[0]} onOpen={openReelsAt} />
+            {displayedNews.slice(1).map((n) => <CompactNewsCard key={n.id} news={n} onOpen={openReelsAt} />)}
           </div>
         )}
       </div>
 
       <DistrictSelector open={pickerOpen} current={district} onSelect={handleDistrictSelect} onClose={() => setPickerOpen(false)} />
 
-      {reelsOpen && displayedNews?.length > 0 && (
-        <ReelsFeed news={displayedNews} onClose={() => setReelsOpen(false)} onOpenDetail={(id) => { setReelsOpen(false); navigate(`/news/${id}`) }} />
+      {reelsIndex !== null && displayedNews?.length > 0 && (
+        <ReelsFeed news={displayedNews} startIndex={reelsIndex} onClose={() => setReelsIndex(null)} />
       )}
     </div>
   )

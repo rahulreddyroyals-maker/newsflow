@@ -5,9 +5,13 @@ import { getNewsById, incrementViewCount, toggleBookmark } from '../services/new
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { categoryLabel } from '../utils/categories'
+import ImageWatermark from '../components/ImageWatermark'
 
 const BackIcon = (p) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" {...p}><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+)
+const ShareIcon = (p) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" {...p}><circle cx="18" cy="5" r="2.5" stroke="currentColor" strokeWidth="2"/><circle cx="6" cy="12" r="2.5" stroke="currentColor" strokeWidth="2"/><circle cx="18" cy="19" r="2.5" stroke="currentColor" strokeWidth="2"/><path d="M8.2 10.8 15.8 6.7M8.2 13.2l7.6 4.1" stroke="currentColor" strokeWidth="2"/></svg>
 )
 
 export default function NewsDetail() {
@@ -70,7 +74,17 @@ export default function NewsDetail() {
         ) : (
           <div style={{ width: '100%', aspectRatio: '4/3', background: 'var(--nf-flow)', opacity: 0.2 }} />
         )}
+        <ImageWatermark size="lg" />
         <button onClick={() => navigate(-1)} style={backBtnStyle}><BackIcon /></button>
+        <div style={topActionsStyle}>
+          <button onClick={handleBookmark} style={topActionBtnStyle} aria-label="Save">
+            <span style={{ fontSize: 16, color: isBookmarked ? 'var(--nf-orange-light)' : '#fff' }}>{isBookmarked ? '★' : '☆'}</span>
+          </button>
+          <button onClick={handleShare} style={topActionBtnStyle} aria-label="Share">
+            <ShareIcon style={{ color: '#fff' }} />
+          </button>
+        </div>
+        {shareCopied && <div style={toastStyle}>Link copied!</div>}
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
@@ -103,6 +117,21 @@ const backBtnStyle = {
   width: 38, height: 38, borderRadius: '50%',
   background: 'rgba(15,31,61,0.55)', border: 'none', color: '#fff',
   display: 'flex', alignItems: 'center', justifyContent: 'center'
+}
+const topActionsStyle = {
+  position: 'absolute', top: 14, right: 14,
+  display: 'flex', gap: 8, zIndex: 3
+}
+const topActionBtnStyle = {
+  width: 38, height: 38, borderRadius: '50%',
+  background: 'rgba(15,31,61,0.55)', border: 'none',
+  display: 'flex', alignItems: 'center', justifyContent: 'center'
+}
+const toastStyle = {
+  position: 'absolute', top: 58, right: 14,
+  background: 'rgba(15,31,61,0.9)', color: '#fff',
+  fontSize: 12, fontWeight: 700, padding: '6px 12px',
+  borderRadius: 8, zIndex: 3
 }
 const dotsRow = { position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }
 const dotStyle = { width: 6, height: 6, borderRadius: '50%', background: '#fff' }

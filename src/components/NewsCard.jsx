@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { categoryLabel } from '../utils/categories'
+import ImageWatermark from './ImageWatermark'
 
 function timeAgo(ts) {
   if (!ts) return ''
@@ -14,20 +15,25 @@ function timeAgo(ts) {
   return `${Math.floor(diffHr / 24)}d ago`
 }
 
-export function BigNewsCard({ news }) {
+// onOpen (optional): when provided (Home's reels-first browsing), tapping the
+// card opens the swipeable Reels view at this story instead of navigating to
+// the standalone detail page. Other contexts (Search, Bookmarks) omit it and
+// keep the normal navigate-to-detail behavior.
+export function BigNewsCard({ news, onOpen }) {
   const navigate = useNavigate()
   const { lang } = useLanguage()
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
   const summary = lang === 'en' && news.summaryEn ? news.summaryEn : news.summary
 
   return (
-    <button onClick={() => navigate(`/news/${news.id}`)} style={bigCardStyle}>
+    <button onClick={() => (onOpen ? onOpen(news) : navigate(`/news/${news.id}`))} style={bigCardStyle}>
       <div style={{ position: 'relative', width: '100%', aspectRatio: '16/10' }}>
         {news.images?.[0] ? (
           <img src={news.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--nf-radius-md) var(--nf-radius-md) 0 0' }} />
         ) : (
           <div style={{ ...placeholderStyle, borderRadius: 'var(--nf-radius-md) var(--nf-radius-md) 0 0' }} />
         )}
+        <ImageWatermark size="lg" />
         <div style={overlayStyle}>
           <span className="nf-chip" style={{ background: 'rgba(255,255,255,0.16)', borderColor: 'transparent', color: '#fff', marginBottom: 8 }}>
             {categoryLabel(news.category, lang)}
@@ -47,13 +53,13 @@ export function BigNewsCard({ news }) {
   )
 }
 
-export function CompactNewsCard({ news }) {
+export function CompactNewsCard({ news, onOpen }) {
   const navigate = useNavigate()
   const { lang } = useLanguage()
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
 
   return (
-    <button onClick={() => navigate(`/news/${news.id}`)} style={compactCardStyle}>
+    <button onClick={() => (onOpen ? onOpen(news) : navigate(`/news/${news.id}`))} style={compactCardStyle}>
       <div style={{ width: 92, height: 92, flexShrink: 0 }}>
         {news.images?.[0] ? (
           <img src={news.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--nf-radius-sm)' }} />

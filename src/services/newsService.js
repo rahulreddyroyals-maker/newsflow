@@ -171,3 +171,38 @@ export async function listJournalists() {
 export async function setJournalistVerified(uid, verified) {
   await updateDoc(doc(db, 'users', uid), { verified })
 }
+
+// ---------- ADMIN: direct upload + manage published news ----------
+export async function publishNewsDirectly(data) {
+  const ref = await addDoc(collection(db, 'news'), {
+    headline: data.headline,
+    headlineEn: data.headlineEn || '',
+    summary: data.summary,
+    summaryEn: data.summaryEn || '',
+    content: data.article,
+    contentEn: data.articleEn || '',
+    category: data.category,
+    district: data.district,
+    images: data.images || [],
+    audioUrl: data.audioUrl || null,
+    authorId: 'admin',
+    authorName: 'NewsFlow',
+    status: 'approved',
+    views: 0,
+    createdAt: serverTimestamp()
+  })
+  return ref.id
+}
+
+export async function listAllNews() {
+  const snap = await getDocs(query(collection(db, 'news'), limit(200)))
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+}
+
+export async function updateNews(id, data) {
+  await updateDoc(doc(db, 'news', id), data)
+}
+
+export async function deleteNews(id) {
+  await deleteDoc(doc(db, 'news', id))
+}

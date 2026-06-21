@@ -113,10 +113,10 @@ Rules: Telugu fields in Telugu, English fields in English, summary ~50 words, ar
     images: imageUrl ? [imageUrl] : [],
     audioUrl: null,
     rawText,
-    sourceUrl: item.link,
-    sourceName: feed.source,
+    sourceUrl: item.link, // kept for dedup + admin reference, never shown to readers
+    sourceName: feed.source, // same — admin-only, see Approvals/ManageNews screens
     authorId: 'system-rss',
-    authorName: `RSS · ${feed.source}`,
+    authorName: 'NewsFlow', // public byline — readers shouldn't see internal wire-source names
     createdAt: FieldValue.serverTimestamp(),
     status: 'pending'
   }

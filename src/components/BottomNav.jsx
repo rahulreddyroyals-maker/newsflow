@@ -40,7 +40,7 @@ export default function BottomNav() {
   // Hide nav on auth/splash screens and on focused task flows that have
   // their own back-button header and bottom action buttons — showing the
   // nav there pushed those buttons under it.
-  const hiddenRoutes = ['/', '/login', '/register', '/admin-login', '/journalist/submit', '/journalist/preview']
+  const hiddenRoutes = ['/', '/login', '/register', '/admin-login', '/journalist/submit', '/journalist/preview', '/admin/upload']
   if (hiddenRoutes.includes(location.pathname)) return null
 
   return (
