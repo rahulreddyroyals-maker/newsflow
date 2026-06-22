@@ -1,11 +1,12 @@
 // src/pages/NewsDetail.jsx
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getNewsById, incrementViewCount, toggleBookmark } from '../services/newsService'
+import { getNewsById, incrementViewCount, toggleBookmark, setReaction } from '../services/newsService'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { categoryLabel } from '../utils/categories'
 import ImageWatermark from '../components/ImageWatermark'
+import CommentsPanel from '../components/CommentsPanel'
 
 const BackIcon = (p) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" {...p}><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -22,6 +23,8 @@ export default function NewsDetail() {
   const [news, setNews] = useState(null)
   const [imgIndex, setImgIndex] = useState(0)
   const [shareCopied, setShareCopied] = useState(false)
+  const [isPortraitVideo, setIsPortraitVideo] = useState(null)
+  const [commentsOpen, setCommentsOpen] = useState(false)
 
   useEffect(() => {
     getNewsById(id).then(setNews)
@@ -39,11 +42,37 @@ export default function NewsDetail() {
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
   const content = lang === 'en' && news.contentEn ? news.contentEn : news.content
   const isBookmarked = profile?.bookmarks?.includes(id)
+  const isLiked = news.likedBy?.includes(user?.uid)
+  const isDisliked = news.dislikedBy?.includes(user?.uid)
+
+  function handleVideoMeta(e) {
+    const { videoWidth, videoHeight } = e.target
+    setIsPortraitVideo(videoHeight > videoWidth * 1.1)
+  }
 
   async function handleBookmark() {
     if (!user) return navigate('/login')
     await toggleBookmark(user.uid, id, isBookmarked)
     refreshProfile()
+  }
+
+  async function handleReaction(type) {
+    if (!user) return navigate('/login')
+    const prevLiked = news.likedBy || []
+    const prevDisliked = news.dislikedBy || []
+    setNews((n) => {
+      const liked = new Set(prevLiked)
+      const disliked = new Set(prevDisliked)
+      if (type === 'like') {
+        liked.has(user.uid) ? liked.delete(user.uid) : liked.add(user.uid)
+        disliked.delete(user.uid)
+      } else {
+        disliked.has(user.uid) ? disliked.delete(user.uid) : disliked.add(user.uid)
+        liked.delete(user.uid)
+      }
+      return { ...n, likedBy: [...liked], dislikedBy: [...disliked] }
+    })
+    await setReaction(id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
   function handleShare() {
@@ -57,11 +86,25 @@ export default function NewsDetail() {
     }
   }
 
+  const videoIsPortrait = news.videoUrl && isPortraitVideo === true
+
   return (
     <div className="nf-screen">
       <div style={{ position: 'relative' }}>
         {news.videoUrl ? (
-          <video controls src={news.videoUrl} poster={news.images?.[0]} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', background: '#000' }} />
+          <video
+            controls
+            playsInline
+            src={news.videoUrl}
+            poster={news.images?.[0]}
+            onLoadedMetadata={handleVideoMeta}
+            style={{
+              width: '100%',
+              aspectRatio: videoIsPortrait ? '9/16' : '4/3',
+              objectFit: videoIsPortrait ? 'contain' : 'cover',
+              background: '#000'
+            }}
+          />
         ) : news.images?.length ? (
           <>
             <img src={news.images[imgIndex]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover' }} />
@@ -108,6 +151,16 @@ export default function NewsDetail() {
 
         <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content}</p>
 
+        <div style={reactionRowStyle}>
+          <button onClick={() => handleReaction('like')} style={reactionBtnStyle(isLiked)}>
+            👍 {news.likedBy?.length || ''}
+          </button>
+          <button onClick={() => handleReaction('dislike')} style={reactionBtnStyle(isDisliked)}>
+            👎 {news.dislikedBy?.length || ''}
+          </button>
+          <button onClick={() => setCommentsOpen(true)} style={reactionBtnStyle(false)}>💬 Comments</button>
+        </div>
+
         <div style={actionRowStyle}>
           <button className="nf-btn nf-btn-ghost" onClick={handleShare} style={{ flex: 1 }}>📤 {shareCopied ? 'Link copied!' : 'Share'}</button>
           <button className="nf-btn nf-btn-ghost" onClick={handleBookmark} style={{ flex: 1, color: isBookmarked ? 'var(--nf-orange)' : 'var(--nf-navy)' }}>
@@ -116,6 +169,8 @@ export default function NewsDetail() {
           <button className="nf-btn nf-btn-ghost" style={{ flex: 1 }}>⚠ Report</button>
         </div>
       </div>
+
+      {commentsOpen && <CommentsPanel newsId={id} onClose={() => setCommentsOpen(false)} />}
     </div>
   )
 }
@@ -144,4 +199,14 @@ const toastStyle = {
 const dotsRow = { position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }
 const dotStyle = { width: 6, height: 6, borderRadius: '50%', background: '#fff' }
 const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16 }
-const actionRowStyle = { display: 'flex', gap: 10, margin: '26px 0 30px' }
+const reactionRowStyle = { display: 'flex', gap: 10, marginTop: 22 }
+const reactionBtnStyle = (active) => ({
+  border: '1.5px solid var(--nf-line)',
+  background: active ? 'var(--nf-paper-dim)' : 'var(--nf-paper)',
+  borderRadius: 10,
+  padding: '8px 14px',
+  fontSize: 13.5,
+  fontWeight: 700,
+  color: 'var(--nf-navy)'
+})
+const actionRowStyle = { display: 'flex', gap: 10, margin: '16px 0 30px' }

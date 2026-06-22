@@ -124,6 +124,8 @@ export async function approveDraft(draftEntry) {
     authorName: rest.authorName || 'NewsFlow Reporter',
     status: 'approved',
     views: 0,
+    likedBy: [],
+    dislikedBy: [],
     createdAt: serverTimestamp()
   })
   await updateDoc(doc(db, 'drafts', id), { status: 'approved' })
@@ -206,6 +208,8 @@ export async function publishNewsDirectly(data) {
     authorName: 'NewsFlow',
     status: 'approved',
     views: 0,
+    likedBy: [],
+    dislikedBy: [],
     createdAt: serverTimestamp()
   })
   return ref.id
@@ -222,4 +226,48 @@ export async function updateNews(id, data) {
 
 export async function deleteNews(id) {
   await deleteDoc(doc(db, 'news', id))
+}
+
+// ---------- LIKES / DISLIKES ----------
+// Stored as uid arrays on the news doc itself (small scale, simple toggle
+// logic) rather than a separate collection — fine at MVP volume; revisit if
+// a single story ever needs thousands of reactions.
+export async function setReaction(newsId, uid, type, current) {
+  const { likedBy = [], dislikedBy = [] } = current
+  const isLiked = likedBy.includes(uid)
+  const isDisliked = dislikedBy.includes(uid)
+  const update = {}
+
+  if (type === 'like') {
+    update.likedBy = isLiked ? arrayRemove(uid) : arrayUnion(uid)
+    if (isDisliked) update.dislikedBy = arrayRemove(uid)
+  } else {
+    update.dislikedBy = isDisliked ? arrayRemove(uid) : arrayUnion(uid)
+    if (isLiked) update.likedBy = arrayRemove(uid)
+  }
+  await updateDoc(doc(db, 'news', newsId), update)
+}
+
+// ---------- COMMENTS ----------
+// Subcollection per story: news/{newsId}/comments/{commentId}
+export function listenToComments(newsId, callback, onError) {
+  const q = query(collection(db, 'news', newsId, 'comments'), limit(200))
+  return onSnapshot(
+    q,
+    (snap) => callback(sortByCreatedAtAsc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+    (err) => { console.error('listenToComments failed:', err); onError?.(err); callback([]) }
+  )
+}
+
+export async function addComment(newsId, { text, authorId, authorName }) {
+  await addDoc(collection(db, 'news', newsId, 'comments'), {
+    text,
+    authorId,
+    authorName,
+    createdAt: serverTimestamp()
+  })
+}
+
+export async function deleteComment(newsId, commentId) {
+  await deleteDoc(doc(db, 'news', newsId, 'comments', commentId))
 }

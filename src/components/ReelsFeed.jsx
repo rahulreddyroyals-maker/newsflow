@@ -3,20 +3,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { categoryLabel } from '../utils/categories'
-import { toggleBookmark, incrementViewCount } from '../services/newsService'
+import { toggleBookmark, incrementViewCount, setReaction } from '../services/newsService'
 import ImageWatermark from './ImageWatermark'
+import CommentsPanel from './CommentsPanel'
 
 // Full-screen, one-story-per-screen vertical feed — the primary way stories
 // are read from Home now. Scroll-snap does the heavy lifting (no gesture
 // library needed): swipe up for the next story, swipe down for the previous
-// one, identical to a reels/shorts feed. The FULL article shows inline on
-// each slide (scrollable within the slide if it's long), so reading never
-// requires leaving the swipe flow.
+// one, identical to a reels/shorts feed.
 export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   const containerRef = useRef(null)
 
-  // Jump straight to the tapped story on open, instead of always starting
-  // from the top of the list.
   useEffect(() => {
     if (containerRef.current && startIndex > 0) {
       const slide = containerRef.current.children[startIndex]
@@ -36,19 +33,22 @@ export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   )
 }
 
-function ReelSlide({ news }) {
+function ReelSlide({ news: initialNews }) {
   const { user, profile, refreshProfile } = useAuth()
   const { lang } = useLanguage()
+  const [news, setNews] = useState(initialNews)
   const [justCopied, setJustCopied] = useState(false)
   const [seen, setSeen] = useState(false)
+  const [isPortraitVideo, setIsPortraitVideo] = useState(null) // null = unknown yet, true/false once metadata loads
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const slideRef = useRef(null)
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
   const summary = lang === 'en' && news.summaryEn ? news.summaryEn : news.summary
   const content = lang === 'en' && news.contentEn ? news.contentEn : news.content
   const isBookmarked = profile?.bookmarks?.includes(news.id)
+  const isLiked = news.likedBy?.includes(user?.uid)
+  const isDisliked = news.dislikedBy?.includes(user?.uid)
 
-  // Count a view once a slide actually scrolls into view, not just because
-  // it exists in the list.
   useEffect(() => {
     const el = slideRef.current
     if (!el) return
@@ -65,11 +65,40 @@ function ReelSlide({ news }) {
     return () => observer.disconnect()
   }, [seen, news.id])
 
+  // Vertical (9:16-ish) video gets the full slide so it isn't cropped down
+  // into a 46%-height box; square/landscape video keeps the split layout
+  // (media up top, full text below) since that's the better fit for those
+  // shapes. Detected from the actual file once its metadata loads.
+  function handleVideoMeta(e) {
+    const { videoWidth, videoHeight } = e.target
+    setIsPortraitVideo(videoHeight > videoWidth * 1.1)
+  }
+
   async function handleBookmark(e) {
     e.stopPropagation()
     if (!user) return
     await toggleBookmark(user.uid, news.id, isBookmarked)
     refreshProfile()
+  }
+
+  async function handleReaction(type) {
+    if (!user) return
+    const prevLiked = news.likedBy || []
+    const prevDisliked = news.dislikedBy || []
+    // Optimistic local update so the tap feels instant; Firestore write happens alongside.
+    setNews((n) => {
+      const liked = new Set(prevLiked)
+      const disliked = new Set(prevDisliked)
+      if (type === 'like') {
+        liked.has(user.uid) ? liked.delete(user.uid) : liked.add(user.uid)
+        disliked.delete(user.uid)
+      } else {
+        disliked.has(user.uid) ? disliked.delete(user.uid) : disliked.add(user.uid)
+        liked.delete(user.uid)
+      }
+      return { ...n, likedBy: [...liked], dislikedBy: [...disliked] }
+    })
+    await setReaction(news.id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
   function handleShare(e) {
@@ -84,11 +113,20 @@ function ReelSlide({ news }) {
     }
   }
 
+  const fullBleed = news.videoUrl && isPortraitVideo === true
+
   return (
     <section ref={slideRef} style={slideStyle}>
-      <div style={mediaWrapStyle}>
+      <div style={fullBleed ? mediaWrapStyleFull : mediaWrapStyle}>
         {news.videoUrl ? (
-          <video controls src={news.videoUrl} poster={news.images?.[0]} style={bgImageStyle} />
+          <video
+            controls
+            playsInline
+            src={news.videoUrl}
+            poster={news.images?.[0]}
+            onLoadedMetadata={handleVideoMeta}
+            style={fullBleed ? { ...bgImageStyle, objectFit: 'contain', background: '#000' } : bgImageStyle}
+          />
         ) : news.images?.[0] ? (
           <img src={news.images[0]} alt="" style={bgImageStyle} />
         ) : (
@@ -98,6 +136,9 @@ function ReelSlide({ news }) {
         <div style={gradientStyle} />
 
         <div style={rightRailStyle}>
+          <RailButton onClick={() => handleReaction('like')} active={isLiked} icon="👍" label={news.likedBy?.length || 'Like'} />
+          <RailButton onClick={() => handleReaction('dislike')} active={isDisliked} icon="👎" label={news.dislikedBy?.length || ''} />
+          <RailButton onClick={(e) => { e.stopPropagation(); setCommentsOpen(true) }} icon="💬" label="Comment" />
           <RailButton onClick={handleBookmark} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" />
           <RailButton onClick={handleShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} />
         </div>
@@ -115,9 +156,13 @@ function ReelSlide({ news }) {
         </div>
       </div>
 
-      <div style={textPaneStyle}>
-        <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
-      </div>
+      {!fullBleed && (
+        <div style={textPaneStyle}>
+          <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
+        </div>
+      )}
+
+      {commentsOpen && <CommentsPanel newsId={news.id} onClose={() => setCommentsOpen(false)} dark />}
     </section>
   )
 }
@@ -125,7 +170,7 @@ function ReelSlide({ news }) {
 function RailButton({ onClick, icon, label, active }) {
   return (
     <button onClick={onClick} style={railBtnStyle}>
-      <span style={{ fontSize: 22, color: active ? 'var(--nf-orange-light)' : '#fff' }}>{icon}</span>
+      <span style={{ fontSize: 22, filter: active ? 'none' : 'grayscale(0.3) opacity(0.9)' }}>{icon}</span>
       <span style={{ fontSize: 10.5, color: '#fff', fontWeight: 700, marginTop: 2 }}>{label}</span>
     </button>
   )
@@ -174,6 +219,14 @@ const mediaWrapStyle = {
   minHeight: 0,
   overflow: 'hidden'
 }
+// Portrait video takes the whole slide instead of the 46% split — matches
+// the natural shape of a 9:16 phone-recorded clip instead of cropping it.
+const mediaWrapStyleFull = {
+  position: 'relative',
+  flex: '1 1 auto',
+  minHeight: 0,
+  overflow: 'hidden'
+}
 const bgImageStyle = {
   position: 'absolute',
   inset: 0,
@@ -184,14 +237,19 @@ const bgImageStyle = {
 const gradientStyle = {
   position: 'absolute',
   inset: 0,
-  background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.55) 100%)'
+  background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.55) 100%)',
+  // Purely decorative — without this, the overlay silently swallows every
+  // tap meant for the video underneath (including the native play button),
+  // which is why video previously appeared not to play at all.
+  pointerEvents: 'none'
 }
 const topCaptionStyle = {
   position: 'absolute',
   left: 16,
   right: 76,
   bottom: 14,
-  zIndex: 2
+  zIndex: 2,
+  pointerEvents: 'none'
 }
 const textPaneStyle = {
   flex: '1 1 auto',
@@ -208,7 +266,7 @@ const rightRailStyle = {
   zIndex: 3,
   display: 'flex',
   flexDirection: 'column',
-  gap: 16
+  gap: 14
 }
 const railBtnStyle = {
   border: 'none',

@@ -9,10 +9,21 @@ service cloud.firestore {
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
     function isJournalist() { return isSignedIn() && myRole() == 'journalist' && myProfile().suspended != true; }
 
-    // Public, read-only published news feed
+    // Public, read-only published news feed — EXCEPT likedBy/dislikedBy,
+    // which any signed-in reader can toggle (everything else stays admin-only).
     match /news/{newsId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'dislikedBy']));
+
+      // Comments: anyone signed in can post as themselves; anyone can read;
+      // a comment can be removed by its author or an admin.
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+        allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      }
     }
 
     // Categories & districts are static reference data
