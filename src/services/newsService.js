@@ -39,14 +39,19 @@ export async function toggleBookmark(uid, newsId, isBookmarked) {
 }
 
 // ---------- NEWS (published, reader-facing) ----------
-export function listenToFeed({ district, category }, callback, onError) {
+// District filtering happens client-side now (see districtMatchesFilter in
+// utils/districts.js) — a server-side where('district','==',x) couldn't
+// express "Andhra Pradesh statewide OR any of its 28 districts" without an
+// `in` query, which Firestore caps at 30 values (Telangana alone has 33
+// districts, already over that cap). Category has no such case, so it's
+// still filtered server-side.
+export function listenToFeed({ category }, callback, onError) {
   const clauses = [where('status', '==', 'approved')]
-  if (district && district !== 'All') clauses.push(where('district', '==', district))
   if (category && category !== 'All') clauses.push(where('category', '==', category))
-  const q = query(collection(db, 'news'), ...clauses, limit(100))
+  const q = query(collection(db, 'news'), ...clauses, limit(150))
   return onSnapshot(
     q,
-    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 40)),
+    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
     (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
   )
 }

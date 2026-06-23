@@ -34,21 +34,26 @@ export default function AdminDashboard() {
         <h1 style={{ fontSize: 20 }}>Admin Dashboard</h1>
         <div className="nf-flow-rule" style={{ marginTop: 8, marginBottom: 18 }} />
       </div>
-      <div className="nf-scroll-body nf-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {tiles.map((t) => (
-          <button key={t.label} className="nf-card" style={tileStyle} onClick={t.onClick}>
-            <span style={{ fontSize: 28, fontWeight: 800, color: t.color }}>{t.value ?? '—'}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--nf-ink-soft)', fontWeight: 600 }}>{t.label}</span>
-          </button>
-        ))}
-        <button className="nf-btn nf-btn-flow" style={{ gridColumn: 'span 2', marginTop: 6 }} onClick={() => navigate('/admin/approvals')}>
+      <div className="nf-scroll-body nf-container">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {tiles.map((t) => (
+            <button key={t.label} className="nf-card" style={tileStyle} onClick={t.onClick}>
+              <span style={{ fontSize: 28, fontWeight: 800, color: t.color }}>{t.value ?? '—'}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--nf-ink-soft)', fontWeight: 600 }}>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <button className="nf-btn nf-btn-flow nf-btn-block" style={{ marginTop: 18 }} onClick={() => navigate('/admin/approvals')}>
           Review Pending News →
         </button>
-        <button className="nf-btn nf-btn-primary" style={{ gridColumn: 'span 2' }} onClick={() => navigate('/admin/upload')}>
+        <button className="nf-btn nf-btn-primary nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/upload')}>
           + Upload News Directly
         </button>
-        <button className="nf-btn nf-btn-ghost" style={{ gridColumn: 'span 2' }} onClick={() => navigate('/admin/manage-news')}>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 20 }} onClick={() => navigate('/admin/manage-news')}>
           Edit Published News
+        </button>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginBottom: 30 }} onClick={() => navigate('/admin/journalists')}>
+          Manage Journalists
         </button>
       </div>
     </div>

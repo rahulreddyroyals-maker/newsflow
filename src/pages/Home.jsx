@@ -6,6 +6,7 @@ import DistrictSelector from '../components/DistrictSelector'
 import { BigNewsCard, CompactNewsCard } from '../components/NewsCard'
 import ReelsFeed from '../components/ReelsFeed'
 import { listenToFeed, updateUserProfile } from '../services/newsService'
+import { districtMatchesFilter } from '../utils/districts'
 import { useAuth } from '../contexts/AuthContext'
 
 const DISTRICT_KEY = 'nf_selected_district'
@@ -53,9 +54,9 @@ export default function Home() {
   useEffect(() => {
     setNews(null)
     setFeedError('')
-    const unsub = listenToFeed({ district, category }, setNews, (err) => setFeedError(err.message || 'Could not load news.'))
+    const unsub = listenToFeed({ category }, setNews, (err) => setFeedError(err.message || 'Could not load news.'))
     return unsub
-  }, [district, category])
+  }, [category])
 
   async function handleDistrictSelect(d) {
     setDistrict(d)
@@ -67,7 +68,8 @@ export default function Home() {
     }
   }
 
-  const displayedNews = news && district === 'All' ? withLocalFirst(news, profile?.district) : news
+  const filteredByDistrict = news ? news.filter((n) => districtMatchesFilter(n.district, district)) : null
+  const displayedNews = filteredByDistrict && district === 'All' ? withLocalFirst(filteredByDistrict, profile?.district) : filteredByDistrict
 
   // Tapping ANY story opens the swipeable reels view at that story — this is
   // now the default reading experience, not a hidden alternate mode. Scroll
@@ -92,7 +94,7 @@ export default function Home() {
           </div>
         )}
 
-        {news?.length === 0 && (
+        {news !== null && displayedNews?.length === 0 && (
           <div className="nf-empty">
             <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--nf-navy)', marginBottom: 6 }}>No news here yet</p>
             <p style={{ fontSize: 13.5 }}>Try a different district or category, or check back soon.</p>

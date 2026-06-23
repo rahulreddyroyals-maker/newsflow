@@ -1,11 +1,11 @@
 // src/admin/UploadNews.jsx
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../utils/categories'
 import { ALL_DISTRICTS } from '../utils/districts'
-import { generateNewsDraft, translateDraft } from '../services/groq'
-import { uploadImage, uploadVideo, publishNewsDirectly } from '../services/newsService'
+import { generateNewsDraft, translateDraft, transcribeVoiceNote } from '../services/groq'
+import { uploadImage, uploadVideo, uploadAudio, publishNewsDirectly } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 // Lets an admin publish a story directly — no approval step, since the admin
@@ -25,6 +25,10 @@ export default function UploadNews() {
   const [busy, setBusy] = useState(false)
   const [busyLabel, setBusyLabel] = useState('')
   const [error, setError] = useState('')
+  const [audioBlob, setAudioBlob] = useState(null)
+  const [recording, setRecording] = useState(false)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
 
   if (!isAdmin) {
     return <div className="nf-screen" style={{ alignItems: 'center', justifyContent: 'center' }}><p>Admins only</p></div>
@@ -32,6 +36,30 @@ export default function UploadNews() {
 
   function updateDraftField(field, value) {
     setDraft((d) => ({ ...d, [field]: value }))
+  }
+
+  async function startRecording() {
+    setError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
+      recorder.onstop = () => {
+        setAudioBlob(new Blob(chunksRef.current, { type: 'audio/webm' }))
+        stream.getTracks().forEach((t) => t.stop())
+      }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setRecording(true)
+    } catch {
+      setError('Microphone access denied. You can still type notes below.')
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop()
+    setRecording(false)
   }
 
   async function handleVideoPick(e) {
@@ -48,15 +76,26 @@ export default function UploadNews() {
   }
 
   async function handleGenerateDraft() {
-    if (!rawText.trim()) return setError('Write or paste the report notes first.')
+    if (!rawText.trim() && !audioBlob) return setError('Write notes or record a voice note first.')
     setError('')
     setBusy(true)
-    setBusyLabel('Writing AI draft…')
     try {
-      const generated = await generateNewsDraft({ rawText, language: 'Telugu', category, district })
+      let combinedText = rawText.trim()
+      if (audioBlob) {
+        setBusyLabel('Transcribing voice note…')
+        try {
+          const transcript = await transcribeVoiceNote(audioBlob, 'te')
+          combinedText = [combinedText, transcript].filter(Boolean).join('\n\n')
+        } catch (err) {
+          if (!combinedText) throw new Error('Voice transcription failed and there are no typed notes to fall back on. Please type a few lines, or try recording again.')
+          setError('Voice transcription failed — continuing with typed notes only. ')
+        }
+      }
+      setBusyLabel('Writing AI draft…')
+      const generated = await generateNewsDraft({ rawText: combinedText, language: 'Telugu', category, district })
       setDraft((d) => ({ ...d, headline: generated.headline, summary: generated.summary, article: generated.article }))
     } catch (err) {
-      setError('AI draft failed: ' + err.message)
+      setError((prev) => (prev ? prev + ' ' : '') + 'AI draft failed: ' + err.message)
     } finally {
       setBusy(false)
       setBusyLabel('')
@@ -93,8 +132,14 @@ export default function UploadNews() {
         videoUrl = await uploadVideo(videoFile)
       }
 
+      let audioUrl = null
+      if (audioBlob) {
+        setBusyLabel('Uploading voice note…')
+        audioUrl = await uploadAudio(audioBlob)
+      }
+
       setBusyLabel('Publishing…')
-      await publishNewsDirectly({ ...draft, category, district, images: imageUrls, videoUrl })
+      await publishNewsDirectly({ ...draft, category, district, images: imageUrls, videoUrl, audioUrl })
       navigate('/admin', { replace: true })
     } catch (err) {
       setError('Could not publish: ' + err.message)
@@ -147,6 +192,24 @@ export default function UploadNews() {
             </div>
           )}
           {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12.5, marginTop: 6 }}>{videoError}</p>}
+        </div>
+
+        <div className="nf-input-group">
+          <label className="nf-label">Voice note (optional)</label>
+          {!audioBlob ? (
+            <button
+              type="button"
+              className={`nf-btn ${recording ? 'nf-btn-primary' : 'nf-btn-ghost'} nf-btn-block`}
+              onClick={recording ? stopRecording : startRecording}
+            >
+              {recording ? '⏹ Stop recording' : '🎙 Record voice note'}
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <audio controls src={URL.createObjectURL(audioBlob)} style={{ flex: 1, height: 38 }} />
+              <button type="button" className="nf-btn nf-btn-ghost" onClick={() => setAudioBlob(null)}>Remove</button>
+            </div>
+          )}
         </div>
 
         <div className="nf-input-group">

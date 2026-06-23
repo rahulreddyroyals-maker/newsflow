@@ -63,29 +63,53 @@ since it makes outbound network calls) so the key stays server-side.
 Voice notes are transcribed using Groq's hosted `whisper-large-v3` model (no self-hosted
 Whisper needed — simpler than the `whisper.cpp` route in the original plan, same result).
 
-## 5. RSS / free news feed ingestion (no Blaze plan needed)
+## 5. RSS / free news feed ingestion
 
-Browsers can't fetch most RSS feeds directly (CORS), and Firebase Cloud Functions
-need the Blaze plan just to make outbound network calls — so this uses a free
-GitHub Actions cron job instead, running `scripts/rss-ingest.mjs` every 2 hours.
+Browsers can't fetch most RSS feeds directly (CORS), so this uses a free GitHub
+Actions cron job, running `scripts/rss-ingest.mjs` every 30 minutes.
 
 What it does: fetches each feed in `scripts/feeds.config.mjs` → rewrites the item
 with Groq into NewsFlow's bilingual format → guesses category + district → writes
 it into the same `drafts` collection journalists submit to. **Nothing is
 auto-published** — RSS items land in Admin → Pending Approval exactly like a
-journalist's report, tagged "RSS · <source name>", so you review before they go live.
+journalist's report, tagged with the real source visible only to admins (readers
+just see "NewsFlow"), so you review before they go live.
 
 ### Setup
 1. **Get a Firebase service account key**: Firebase console → Project settings →
    Service accounts → Generate new private key. Downloads a JSON file — keep it secret.
 2. **Push this project to a GitHub repo** (private is fine — the workflow runs free
-   either way, just with a monthly minutes cap on private repos).
+   either way, just with a monthly minutes cap on private repos; making the repo
+   public removes that cap entirely, and your Firebase/Groq keys stay safe either
+   way since they're stored as encrypted GitHub secrets, not in the repo content).
 3. In the repo, go to Settings → Secrets and variables → Actions, and add:
    - `FIREBASE_SERVICE_ACCOUNT` — paste the entire contents of the JSON key file
    - `GROQ_API_KEY` — your Groq key
    - `NEWSDATA_API_KEY` — optional, only if you enable the NewsData.io fallback
-4. The workflow (`.github/workflows/rss-ingest.yml`) runs automatically every 2 hours,
-   or trigger it manually from the repo's Actions tab → "NewsFlow RSS Ingest" → Run workflow.
+4. The workflow (`.github/workflows/rss-ingest.yml`) runs automatically every 30
+   minutes, or trigger it manually from the repo's Actions tab → "NewsFlow RSS
+   Ingest" → Run workflow.
+
+### Why news can still show up "late," and what to do about it
+Two separate delays stack on top of each other:
+- **The poll interval itself** (currently 30 min) — a story published right after
+  a run has to wait for the next one.
+- **GitHub's scheduling is "best effort,"** not exact — especially on free/public
+  runners, a scheduled run can slip by 10-20+ minutes past when it was due. This
+  is a platform-level limitation, not something in this code to fix.
+
+Options, roughly in order of effort:
+1. **Shorten the interval further** (e.g. `*/15 * * * *` for every 15 min) — works,
+   but on a *private* repo do the math against the 2,000 free min/month first;
+   making the repo public sidesteps that limit entirely.
+2. **Add more feeds** so there's simply more to catch on each run — see below.
+3. **Move off GitHub Actions entirely**, now that you're on the Blaze plan: a
+   Cloud Scheduler job (down to 1-minute granularity) triggering a Cloud Function
+   that runs the same ingestion logic would likely feel more "live," and keeps
+   everything inside Firebase instead of split across two platforms. This is a
+   bigger lift than adjusting a cron string, so worth doing only if 15-30 minute
+   freshness genuinely isn't good enough once you have real readers — ask if you
+   want this built out.
 
 ### Adding more feeds
 Only one feed is pre-verified in `scripts/feeds.config.mjs` (Andhra Jyothy). RSS paths

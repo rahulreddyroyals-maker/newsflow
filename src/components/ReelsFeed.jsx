@@ -13,6 +13,11 @@ import CommentsPanel from './CommentsPanel'
 // one, identical to a reels/shorts feed.
 export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   const containerRef = useRef(null)
+  // Lifted up here (not per-slide) so opening comments can lock background
+  // scrolling on the ONE shared feed container — previously each slide owned
+  // its own open/close state with no way to freeze the feed underneath,
+  // which let a stray swipe while typing a comment scroll to the next story.
+  const [openCommentsFor, setOpenCommentsFor] = useState(null)
 
   useEffect(() => {
     if (containerRef.current && startIndex > 0) {
@@ -24,24 +29,29 @@ export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   return (
     <div style={overlayStyle}>
       <button onClick={onClose} style={closeBtnStyle} aria-label="Back to list">←</button>
-      <div ref={containerRef} style={scrollStyle}>
+      <div
+        ref={containerRef}
+        style={{ ...scrollStyle, overflowY: openCommentsFor ? 'hidden' : 'scroll' }}
+      >
         {news.map((item) => (
-          <ReelSlide key={item.id} news={item} />
+          <ReelSlide key={item.id} news={item} onOpenComments={() => setOpenCommentsFor(item.id)} />
         ))}
       </div>
+
+      {openCommentsFor && <CommentsPanel newsId={openCommentsFor} onClose={() => setOpenCommentsFor(null)} dark />}
     </div>
   )
 }
 
-function ReelSlide({ news: initialNews }) {
+function ReelSlide({ news: initialNews, onOpenComments }) {
   const { user, profile, refreshProfile } = useAuth()
   const { lang } = useLanguage()
   const [news, setNews] = useState(initialNews)
   const [justCopied, setJustCopied] = useState(false)
   const [seen, setSeen] = useState(false)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null) // null = unknown yet, true/false once metadata loads
-  const [commentsOpen, setCommentsOpen] = useState(false)
   const slideRef = useRef(null)
+  const videoRef = useRef(null)
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
   const summary = lang === 'en' && news.summaryEn ? news.summaryEn : news.summary
   const content = lang === 'en' && news.contentEn ? news.contentEn : news.content
@@ -58,8 +68,14 @@ function ReelSlide({ news: initialNews }) {
           setSeen(true)
           incrementViewCount(news.id)
         }
+        // Pause audio/video the moment this slide scrolls mostly out of
+        // view — without this, a video kept playing (and audible) even
+        // after scrolling on to the next story.
+        if (!entry.isIntersecting && videoRef.current && !videoRef.current.paused) {
+          videoRef.current.pause()
+        }
       },
-      { threshold: 0.6 }
+      { threshold: 0.5 }
     )
     observer.observe(el)
     return () => observer.disconnect()
@@ -85,7 +101,6 @@ function ReelSlide({ news: initialNews }) {
     if (!user) return
     const prevLiked = news.likedBy || []
     const prevDisliked = news.dislikedBy || []
-    // Optimistic local update so the tap feels instant; Firestore write happens alongside.
     setNews((n) => {
       const liked = new Set(prevLiked)
       const disliked = new Set(prevDisliked)
@@ -120,6 +135,7 @@ function ReelSlide({ news: initialNews }) {
       <div style={fullBleed ? mediaWrapStyleFull : mediaWrapStyle}>
         {news.videoUrl ? (
           <video
+            ref={videoRef}
             controls
             playsInline
             src={news.videoUrl}
@@ -138,7 +154,7 @@ function ReelSlide({ news: initialNews }) {
         <div style={rightRailStyle}>
           <RailButton onClick={() => handleReaction('like')} active={isLiked} icon="👍" label={news.likedBy?.length || 'Like'} />
           <RailButton onClick={() => handleReaction('dislike')} active={isDisliked} icon="👎" label={news.dislikedBy?.length || ''} />
-          <RailButton onClick={(e) => { e.stopPropagation(); setCommentsOpen(true) }} icon="💬" label="Comment" />
+          <RailButton onClick={(e) => { e.stopPropagation(); onOpenComments() }} icon="💬" label="Comment" />
           <RailButton onClick={handleBookmark} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" />
           <RailButton onClick={handleShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} />
         </div>
@@ -161,8 +177,6 @@ function ReelSlide({ news: initialNews }) {
           <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
         </div>
       )}
-
-      {commentsOpen && <CommentsPanel newsId={news.id} onClose={() => setCommentsOpen(false)} dark />}
     </section>
   )
 }
@@ -238,9 +252,6 @@ const gradientStyle = {
   position: 'absolute',
   inset: 0,
   background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.55) 100%)',
-  // Purely decorative — without this, the overlay silently swallows every
-  // tap meant for the video underneath (including the native play button),
-  // which is why video previously appeared not to play at all.
   pointerEvents: 'none'
 }
 const topCaptionStyle = {
@@ -259,10 +270,14 @@ const textPaneStyle = {
   padding: '18px 18px 32px',
   WebkitOverflowScrolling: 'touch'
 }
+// Bottom offset raised well clear of the native <video controls> bar — it
+// used to sit at bottom:18, which collided directly with the browser's own
+// control strip (play/seek/fullscreen) rendered along the video's bottom
+// edge, causing the visible overlap with the Share label.
 const rightRailStyle = {
   position: 'absolute',
   right: 14,
-  bottom: 18,
+  bottom: 64,
   zIndex: 3,
   display: 'flex',
   flexDirection: 'column',

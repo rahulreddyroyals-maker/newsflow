@@ -2,9 +2,14 @@ name: NewsFlow RSS Ingest
 
 on:
   schedule:
-    # Every 2 hours. GitHub Actions free tier: 2,000 min/month on private repos,
-    # unlimited on public repos — this job takes seconds per run.
-    - cron: '0 */2 * * *'
+    # Every 30 minutes. At ~30-60s per run, that's roughly 720-1,440 min/month —
+    # comfortably under GitHub's 2,000 free min/month for private repos (and
+    # unlimited if this repo is public). Note: GitHub's scheduled triggers are
+    # "best effort," not exact — during high platform load a run can slip by
+    # 10-20+ minutes past its scheduled time. There's no way around that with
+    # GitHub Actions specifically; see the README for the Cloud Scheduler
+    # alternative if you need tighter timing guarantees later.
+    - cron: '*/30 * * * *'
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab
 
 jobs:
