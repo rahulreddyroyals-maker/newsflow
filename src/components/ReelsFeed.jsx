@@ -13,10 +13,6 @@ import CommentsPanel from './CommentsPanel'
 // one, identical to a reels/shorts feed.
 export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   const containerRef = useRef(null)
-  // Lifted up here (not per-slide) so opening comments can lock background
-  // scrolling on the ONE shared feed container — previously each slide owned
-  // its own open/close state with no way to freeze the feed underneath,
-  // which let a stray swipe while typing a comment scroll to the next story.
   const [openCommentsFor, setOpenCommentsFor] = useState(null)
 
   useEffect(() => {
@@ -49,7 +45,7 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
   const [news, setNews] = useState(initialNews)
   const [justCopied, setJustCopied] = useState(false)
   const [seen, setSeen] = useState(false)
-  const [isPortraitVideo, setIsPortraitVideo] = useState(null) // null = unknown yet, true/false once metadata loads
+  const [isPortraitVideo, setIsPortraitVideo] = useState(null)
   const slideRef = useRef(null)
   const videoRef = useRef(null)
   const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
@@ -68,9 +64,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
           setSeen(true)
           incrementViewCount(news.id)
         }
-        // Pause audio/video the moment this slide scrolls mostly out of
-        // view — without this, a video kept playing (and audible) even
-        // after scrolling on to the next story.
         if (!entry.isIntersecting && videoRef.current && !videoRef.current.paused) {
           videoRef.current.pause()
         }
@@ -81,17 +74,12 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
     return () => observer.disconnect()
   }, [seen, news.id])
 
-  // Vertical (9:16-ish) video gets the full slide so it isn't cropped down
-  // into a 46%-height box; square/landscape video keeps the split layout
-  // (media up top, full text below) since that's the better fit for those
-  // shapes. Detected from the actual file once its metadata loads.
   function handleVideoMeta(e) {
     const { videoWidth, videoHeight } = e.target
     setIsPortraitVideo(videoHeight > videoWidth * 1.1)
   }
 
-  async function handleBookmark(e) {
-    e.stopPropagation()
+  async function handleBookmark() {
     if (!user) return
     await toggleBookmark(user.uid, news.id, isBookmarked)
     refreshProfile()
@@ -116,8 +104,7 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
     await setReaction(news.id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
-  function handleShare(e) {
-    e.stopPropagation()
+  function handleShare() {
     const shareData = { title: headline, text: summary, url: `${window.location.origin}/news/${news.id}` }
     if (navigator.share) {
       navigator.share(shareData).catch(() => {})
@@ -151,14 +138,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
         <ImageWatermark size="lg" />
         <div style={gradientStyle} />
 
-        <div style={rightRailStyle}>
-          <RailButton onClick={() => handleReaction('like')} active={isLiked} icon="👍" label={news.likedBy?.length || 'Like'} />
-          <RailButton onClick={() => handleReaction('dislike')} active={isDisliked} icon="👎" label={news.dislikedBy?.length || ''} />
-          <RailButton onClick={(e) => { e.stopPropagation(); onOpenComments() }} icon="💬" label="Comment" />
-          <RailButton onClick={handleBookmark} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" />
-          <RailButton onClick={handleShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} />
-        </div>
-
         <div style={topCaptionStyle}>
           <span className="nf-chip" style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'transparent', color: '#fff', marginBottom: 10 }}>
             {categoryLabel(news.category, lang)}
@@ -170,22 +149,67 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             <span>NewsFlow</span>
           </div>
         </div>
+
+        {/* Full-bleed (portrait video) has no separate space below the media
+            for an action bar, so it overlays a thin horizontal strip near
+            the bottom — well clear of the native video control bar — instead
+            of the old vertical rail, which was tall enough to collide with
+            the watermark/caption at the top of much shorter media boxes. */}
+        {fullBleed && (
+          <div style={overlayActionBarStyle}>
+            <ActionBar
+              isLiked={isLiked} isDisliked={isDisliked} isBookmarked={isBookmarked}
+              likeCount={news.likedBy?.length} dislikeCount={news.dislikedBy?.length}
+              justCopied={justCopied}
+              onLike={() => handleReaction('like')} onDislike={() => handleReaction('dislike')}
+              onComment={onOpenComments} onSave={handleBookmark} onShare={handleShare}
+              light
+            />
+          </div>
+        )}
       </div>
 
       {!fullBleed && (
-        <div style={textPaneStyle}>
-          <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
-        </div>
+        <>
+          <div style={actionBarStripStyle}>
+            <ActionBar
+              isLiked={isLiked} isDisliked={isDisliked} isBookmarked={isBookmarked}
+              likeCount={news.likedBy?.length} dislikeCount={news.dislikedBy?.length}
+              justCopied={justCopied}
+              onLike={() => handleReaction('like')} onDislike={() => handleReaction('dislike')}
+              onComment={onOpenComments} onSave={handleBookmark} onShare={handleShare}
+            />
+          </div>
+          <div style={textPaneStyle}>
+            <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
+          </div>
+        </>
       )}
     </section>
   )
 }
 
-function RailButton({ onClick, icon, label, active }) {
+// Single horizontal row — Like · Dislike · Comment · Save · Share — used
+// both as an overlay strip (full-bleed portrait video) and as an in-flow
+// strip between the media and the article text (everything else).
+function ActionBar({ isLiked, isDisliked, isBookmarked, likeCount, dislikeCount, justCopied, onLike, onDislike, onComment, onSave, onShare, light }) {
+  const color = light ? '#fff' : 'var(--nf-navy)'
   return (
-    <button onClick={onClick} style={railBtnStyle}>
-      <span style={{ fontSize: 22, filter: active ? 'none' : 'grayscale(0.3) opacity(0.9)' }}>{icon}</span>
-      <span style={{ fontSize: 10.5, color: '#fff', fontWeight: 700, marginTop: 2 }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+      <BarButton onClick={onLike} active={isLiked} icon="👍" label={likeCount || 'Like'} color={color} />
+      <BarButton onClick={onDislike} active={isDisliked} icon="👎" label={dislikeCount || 'Dislike'} color={color} />
+      <BarButton onClick={onComment} icon="💬" label="Comment" color={color} />
+      <BarButton onClick={onSave} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" color={color} />
+      <BarButton onClick={onShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} color={color} />
+    </div>
+  )
+}
+
+function BarButton({ onClick, icon, label, active, color }) {
+  return (
+    <button onClick={(e) => { e.stopPropagation(); onClick() }} style={barBtnStyle}>
+      <span style={{ fontSize: 19, filter: active ? 'none' : 'grayscale(0.3) opacity(0.85)' }}>{icon}</span>
+      <span style={{ fontSize: 10, color, fontWeight: 700, marginTop: 2 }}>{label}</span>
     </button>
   )
 }
@@ -229,12 +253,10 @@ const slideStyle = {
 }
 const mediaWrapStyle = {
   position: 'relative',
-  flex: '0 0 46%',
+  flex: '0 0 42%',
   minHeight: 0,
   overflow: 'hidden'
 }
-// Portrait video takes the whole slide instead of the 46% split — matches
-// the natural shape of a 9:16 phone-recorded clip instead of cropping it.
 const mediaWrapStyleFull = {
   position: 'relative',
   flex: '1 1 auto',
@@ -257,10 +279,26 @@ const gradientStyle = {
 const topCaptionStyle = {
   position: 'absolute',
   left: 16,
-  right: 76,
+  right: 16,
   bottom: 14,
   zIndex: 2,
   pointerEvents: 'none'
+}
+const actionBarStripStyle = {
+  flexShrink: 0,
+  padding: '10px 16px',
+  background: 'var(--nf-paper)',
+  borderBottom: '1px solid var(--nf-line)'
+}
+// Sits well above the native <video controls> bar (which renders along the
+// video's own bottom edge) instead of competing with it for the same space.
+const overlayActionBarStyle = {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  bottom: 56,
+  zIndex: 3,
+  padding: '0 16px'
 }
 const textPaneStyle = {
   flex: '1 1 auto',
@@ -270,20 +308,7 @@ const textPaneStyle = {
   padding: '18px 18px 32px',
   WebkitOverflowScrolling: 'touch'
 }
-// Bottom offset raised well clear of the native <video controls> bar — it
-// used to sit at bottom:18, which collided directly with the browser's own
-// control strip (play/seek/fullscreen) rendered along the video's bottom
-// edge, causing the visible overlap with the Share label.
-const rightRailStyle = {
-  position: 'absolute',
-  right: 14,
-  bottom: 64,
-  zIndex: 3,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 14
-}
-const railBtnStyle = {
+const barBtnStyle = {
   border: 'none',
   background: 'none',
   display: 'flex',

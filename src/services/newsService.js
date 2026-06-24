@@ -255,8 +255,11 @@ export async function setReaction(newsId, uid, type, current) {
 
 // ---------- COMMENTS ----------
 // Subcollection per story: news/{newsId}/comments/{commentId}
+// Replies are flat in the same collection with a `replyTo` pointer (one
+// level deep — a reply can't itself be replied to), rendered grouped under
+// their parent in the UI rather than as a separate nested subcollection.
 export function listenToComments(newsId, callback, onError) {
-  const q = query(collection(db, 'news', newsId, 'comments'), limit(200))
+  const q = query(collection(db, 'news', newsId, 'comments'), limit(300))
   return onSnapshot(
     q,
     (snap) => callback(sortByCreatedAtAsc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
@@ -264,15 +267,24 @@ export function listenToComments(newsId, callback, onError) {
   )
 }
 
-export async function addComment(newsId, { text, authorId, authorName }) {
+export async function addComment(newsId, { text, authorId, authorName, replyTo = null }) {
   await addDoc(collection(db, 'news', newsId, 'comments'), {
     text,
     authorId,
     authorName,
+    replyTo,
+    likedBy: [],
     createdAt: serverTimestamp()
   })
 }
 
 export async function deleteComment(newsId, commentId) {
   await deleteDoc(doc(db, 'news', newsId, 'comments', commentId))
+}
+
+export async function toggleCommentLike(newsId, commentId, uid, currentLikedBy = []) {
+  const liked = currentLikedBy.includes(uid)
+  await updateDoc(doc(db, 'news', newsId, 'comments', commentId), {
+    likedBy: liked ? arrayRemove(uid) : arrayUnion(uid)
+  })
 }

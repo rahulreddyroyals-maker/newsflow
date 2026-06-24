@@ -1,7 +1,7 @@
 // src/components/CommentsPanel.jsx
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToComments, addComment, deleteComment } from '../services/newsService'
+import { listenToComments, addComment, deleteComment, toggleCommentLike } from '../services/newsService'
 
 function timeAgo(ts) {
   if (!ts) return ''
@@ -16,32 +16,97 @@ function timeAgo(ts) {
 
 // Slides up over whatever's currently on screen (a reels slide or the detail
 // page) rather than navigating to a separate route — comments stay attached
-// to the post the reader was just looking at.
+// to the post the reader was just looking at, and the list inside just
+// scrolls in place no matter how many comments pile up (it doesn't paginate
+// to a new screen).
 export default function CommentsPanel({ newsId, onClose, dark }) {
   const { user, profile, isAdmin } = useAuth()
   const [comments, setComments] = useState(null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [replyingTo, setReplyingTo] = useState(null) // comment id currently being replied to
+  const [replyText, setReplyText] = useState('')
 
   useEffect(() => {
     const unsub = listenToComments(newsId, setComments)
     return unsub
   }, [newsId])
 
+  const topLevel = comments?.filter((c) => !c.replyTo) || []
+  const repliesByParent = {}
+  comments?.filter((c) => c.replyTo).forEach((c) => {
+    repliesByParent[c.replyTo] = [...(repliesByParent[c.replyTo] || []), c]
+  })
+
   async function handlePost() {
     if (!text.trim() || !user) return
     setBusy(true)
-    await addComment(newsId, {
-      text: text.trim(),
-      authorId: user.uid,
-      authorName: profile?.name || 'NewsFlow Reader'
-    })
+    await addComment(newsId, { text: text.trim(), authorId: user.uid, authorName: profile?.name || 'NewsFlow Reader' })
     setText('')
     setBusy(false)
   }
 
+  async function handleReplyPost(parentId) {
+    if (!replyText.trim() || !user) return
+    setBusy(true)
+    await addComment(newsId, { text: replyText.trim(), authorId: user.uid, authorName: profile?.name || 'NewsFlow Reader', replyTo: parentId })
+    setReplyText('')
+    setReplyingTo(null)
+    setBusy(false)
+  }
+
+  async function handleLike(comment) {
+    if (!user) return
+    await toggleCommentLike(newsId, comment.id, user.uid, comment.likedBy || [])
+  }
+
   async function handleDelete(commentId) {
     await deleteComment(newsId, commentId)
+  }
+
+  function CommentRow({ comment, isReply }) {
+    const liked = comment.likedBy?.includes(user?.uid)
+    return (
+      <div style={{ marginBottom: isReply ? 10 : 14, marginLeft: isReply ? 22 : 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: dark ? '#fff' : 'var(--nf-navy)' }}>{comment.authorName}</span>
+          <span style={{ fontSize: 11, color: dark ? 'rgba(255,255,255,0.45)' : 'var(--nf-ink-faint)' }}>{timeAgo(comment.createdAt)}</span>
+        </div>
+        <p style={{ fontSize: 13.5, color: dark ? 'rgba(255,255,255,0.85)' : 'var(--nf-ink)', marginTop: 2, lineHeight: 1.5 }}>{comment.text}</p>
+        <div style={{ display: 'flex', gap: 14, marginTop: 4 }}>
+          <button onClick={() => handleLike(comment)} style={{ border: 'none', background: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 12.5, filter: liked ? 'none' : 'grayscale(0.4) opacity(0.7)' }}>👍</span>
+            <span style={{ fontSize: 11, color: dark ? 'rgba(255,255,255,0.6)' : 'var(--nf-ink-faint)' }}>{comment.likedBy?.length || ''}</span>
+          </button>
+          {!isReply && user && (
+            <button onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)} style={{ border: 'none', background: 'none', color: dark ? 'rgba(255,255,255,0.6)' : 'var(--nf-ink-faint)', fontSize: 11, fontWeight: 700, padding: 0 }}>
+              Reply
+            </button>
+          )}
+          {(isAdmin || comment.authorId === user?.uid) && (
+            <button onClick={() => handleDelete(comment.id)} style={{ border: 'none', background: 'none', color: dark ? 'rgba(255,255,255,0.45)' : 'var(--nf-ink-faint)', fontSize: 11, padding: 0 }}>
+              Delete
+            </button>
+          )}
+        </div>
+
+        {replyingTo === comment.id && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <input
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder={`Reply to ${comment.authorName}…`}
+              style={inputStyle(dark)}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleReplyPost(comment.id)}
+            />
+            <button onClick={() => handleReplyPost(comment.id)} disabled={busy || !replyText.trim()} className="nf-btn nf-btn-flow" style={{ padding: '8px 12px', fontSize: 12.5 }}>Post</button>
+          </div>
+        )}
+
+        {repliesByParent[comment.id]?.map((reply) => <CommentRow key={reply.id} comment={reply} isReply />)}
+      </div>
+    )
   }
 
   return (
@@ -57,25 +122,12 @@ export default function CommentsPanel({ newsId, onClose, dark }) {
 
         <div style={listStyle}>
           {comments === null && <p style={{ color: dark ? 'rgba(255,255,255,0.6)' : 'var(--nf-ink-soft)', fontSize: 13.5 }}>Loading…</p>}
-          {comments?.length === 0 && (
+          {topLevel.length === 0 && comments !== null && (
             <p style={{ color: dark ? 'rgba(255,255,255,0.6)' : 'var(--nf-ink-soft)', fontSize: 13.5, textAlign: 'center', padding: '20px 0' }}>
               No comments yet — be the first to say something.
             </p>
           )}
-          {comments?.map((c) => (
-            <div key={c.id} style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: dark ? '#fff' : 'var(--nf-navy)' }}>{c.authorName}</span>
-                <span style={{ fontSize: 11, color: dark ? 'rgba(255,255,255,0.45)' : 'var(--nf-ink-faint)' }}>{timeAgo(c.createdAt)}</span>
-              </div>
-              <p style={{ fontSize: 13.5, color: dark ? 'rgba(255,255,255,0.85)' : 'var(--nf-ink)', marginTop: 2, lineHeight: 1.5 }}>{c.text}</p>
-              {(isAdmin || c.authorId === user?.uid) && (
-                <button onClick={() => handleDelete(c.id)} style={{ border: 'none', background: 'none', color: dark ? 'rgba(255,255,255,0.45)' : 'var(--nf-ink-faint)', fontSize: 11, padding: 0, marginTop: 4 }}>
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
+          {topLevel.map((c) => <CommentRow key={c.id} comment={c} />)}
         </div>
 
         {user ? (

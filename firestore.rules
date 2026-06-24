@@ -18,10 +18,13 @@ service cloud.firestore {
                     || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'dislikedBy']));
 
       // Comments: anyone signed in can post as themselves; anyone can read;
-      // a comment can be removed by its author or an admin.
+      // a comment can be removed by its author or an admin; any signed-in
+      // user can toggle their own like on a comment (likedBy field only).
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update: if isAdmin()
+                      || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy']));
         allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
       }
     }
