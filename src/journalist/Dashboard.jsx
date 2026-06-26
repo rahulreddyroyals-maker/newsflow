@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listenToMyDrafts, updateUserProfile } from '../services/newsService'
+import WalletSection from './WalletSection'
+import AdLeadsSection from './AdLeadsSection'
+import GuidelinesSection from './GuidelinesSection'
 
 export default function JournalistDashboard() {
   const { user, profile, refreshProfile } = useAuth()
@@ -11,6 +14,7 @@ export default function JournalistDashboard() {
   const [filter, setFilter] = useState('all')
   const [error, setError] = useState('')
   const [savingNameToggle, setSavingNameToggle] = useState(false)
+  const [section, setSection] = useState('reports')
 
   useEffect(() => {
     if (!user) return
@@ -37,7 +41,7 @@ export default function JournalistDashboard() {
   }
 
   const filtered = drafts?.filter((d) => filter === 'all' || d.status === filter) || []
-  const showName = profile?.displayNamePublicly !== false // default true if unset
+  const showName = profile?.displayNamePublicly !== false
   const suspended = profile?.suspended === true
 
   async function toggleShowName() {
@@ -67,52 +71,75 @@ export default function JournalistDashboard() {
           </div>
         )}
 
-        <div style={nameToggleRowStyle}>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-navy)' }}>Show my name on published reports</p>
-            <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 2 }}>
-              {showName ? `New reports default to showing "${profile?.name || 'your name'}"` : 'New reports default to "NewsFlow Citizen Journalist"'} — you can still flip it per report when submitting.
-            </p>
-          </div>
-          <Toggle checked={showName} onChange={toggleShowName} disabled={savingNameToggle} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, margin: '16px 0 6px', overflowX: 'auto' }}>
-          {['all', 'pending', 'approved', 'rejected'].map((f) => (
-            <button key={f} className={`nf-chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)} style={{ textTransform: 'capitalize' }}>{f}</button>
+        <div style={{ display: 'flex', gap: 8, margin: '16px 0', overflowX: 'auto' }}>
+          {[
+            { id: 'reports', label: 'Reports' },
+            { id: 'wallet', label: '💰 Wallet' },
+            { id: 'ads', label: '📢 Local Ads' },
+            { id: 'guidelines', label: 'Guidelines' }
+          ].map((s) => (
+            <button key={s.id} className={`nf-chip ${section === s.id ? 'active' : ''}`} onClick={() => setSection(s.id)}>{s.label}</button>
           ))}
         </div>
       </div>
 
-      <div className="nf-scroll-body nf-container" style={{ paddingTop: 10 }}>
-        {error && (
-          <div className="nf-empty" style={{ color: 'var(--nf-danger)' }}>
-            <p style={{ fontWeight: 700 }}>Couldn't load your reports</p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>{error}</p>
-          </div>
-        )}
-        {!error && drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
-        {!error && drafts && filtered.length === 0 && (
-          <div className="nf-empty">
-            <p style={{ fontWeight: 700, color: 'var(--nf-navy)' }}>No reports here</p>
-            <p style={{ fontSize: 13.5, marginTop: 4 }}>Tap "Submit News" to file your first report.</p>
-          </div>
-        )}
-        {filtered.map((d) => (
-          <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-              <h3 style={{ fontSize: 15, lineHeight: 1.35 }}>{d.headline || '(untitled draft)'}</h3>
-              <span className={`nf-badge nf-badge-${d.status}`} style={{ flexShrink: 0 }}>{d.status}</span>
+      {section === 'reports' && (
+        <>
+          <div style={{ padding: '0 16px' }}>
+            <div style={nameToggleRowStyle}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--nf-navy)' }}>Show my name on published reports</p>
+                <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 2 }}>
+                  {showName ? `New reports default to showing "${profile?.name || 'your name'}"` : 'New reports default to "NewsFlow Citizen Journalist"'} — you can still flip it per report when submitting.
+                </p>
+              </div>
+              <Toggle checked={showName} onChange={toggleShowName} disabled={savingNameToggle} />
             </div>
-            <p style={{ fontSize: 12.5, color: 'var(--nf-ink-faint)', marginTop: 8 }}>{d.district} • {d.category}</p>
-            {d.status === 'rejected' && d.rejectionReason && (
-              <p style={{ fontSize: 12.5, color: 'var(--nf-danger)', marginTop: 6 }}>Reason: {d.rejectionReason}</p>
-            )}
+            <div style={{ display: 'flex', gap: 8, margin: '14px 0 6px', overflowX: 'auto' }}>
+              {['all', 'pending', 'approved', 'rejected'].map((f) => (
+                <button key={f} className={`nf-chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)} style={{ textTransform: 'capitalize' }}>{f}</button>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
 
-      {!suspended && (
+          <div className="nf-scroll-body nf-container" style={{ paddingTop: 10 }}>
+            {error && (
+              <div className="nf-empty" style={{ color: 'var(--nf-danger)' }}>
+                <p style={{ fontWeight: 700 }}>Couldn't load your reports</p>
+                <p style={{ fontSize: 13, marginTop: 4 }}>{error}</p>
+              </div>
+            )}
+            {!error && drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
+            {!error && drafts && filtered.length === 0 && (
+              <div className="nf-empty">
+                <p style={{ fontWeight: 700, color: 'var(--nf-navy)' }}>No reports here</p>
+                <p style={{ fontSize: 13.5, marginTop: 4 }}>Tap "Submit News" to file your first report.</p>
+              </div>
+            )}
+            {filtered.map((d) => (
+              <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <h3 style={{ fontSize: 15, lineHeight: 1.35 }}>{d.headline || '(untitled draft)'}</h3>
+                  <span className={`nf-badge nf-badge-${d.status}`} style={{ flexShrink: 0 }}>{d.status}</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--nf-ink-faint)', marginTop: 8 }}>{d.district} • {d.category}</p>
+                {d.status === 'approved' && (
+                  <p style={{ fontSize: 12, color: 'var(--nf-success)', marginTop: 6, fontWeight: 700 }}>+10 NF points earned</p>
+                )}
+                {d.status === 'rejected' && d.rejectionReason && (
+                  <p style={{ fontSize: 12.5, color: 'var(--nf-danger)', marginTop: 6 }}>Reason: {d.rejectionReason}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {section === 'wallet' && <WalletSection />}
+      {section === 'ads' && <AdLeadsSection />}
+      {section === 'guidelines' && <GuidelinesSection />}
+
+      {section === 'reports' && !suspended && (
         <button className="nf-btn nf-btn-flow" style={fabStyle} onClick={() => navigate('/journalist/submit')}>+ Submit News</button>
       )}
     </div>
@@ -147,8 +174,7 @@ const nameToggleRowStyle = {
   background: 'var(--nf-paper)',
   border: '1px solid var(--nf-line)',
   borderRadius: 10,
-  padding: '12px 14px',
-  marginTop: 14
+  padding: '12px 14px'
 }
 
 const fabStyle = {

@@ -24,6 +24,8 @@ import Approvals from './admin/Approvals'
 import ManageJournalists from './admin/ManageJournalists'
 import UploadNews from './admin/UploadNews'
 import ManageNews from './admin/ManageNews'
+import AdLeads from './admin/AdLeads'
+import Withdrawals from './admin/Withdrawals'
 
 function JournalistArea() {
   const { isJournalist } = useAuth()
@@ -56,6 +58,8 @@ function AppRoutes() {
         <Route path="/admin/journalists" element={<ManageJournalists />} />
         <Route path="/admin/upload" element={<UploadNews />} />
         <Route path="/admin/manage-news" element={<ManageNews />} />
+        <Route path="/admin/ad-leads" element={<AdLeads />} />
+        <Route path="/admin/withdrawals" element={<Withdrawals />} />
 
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>

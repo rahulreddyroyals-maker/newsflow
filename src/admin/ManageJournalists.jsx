@@ -65,6 +65,8 @@ export default function ManageJournalists() {
                   <DetailRow label="District" value={j.district} />
                   <DetailRow label="Preferred language" value={j.language === 'en' ? 'English' : 'Telugu'} />
                   <DetailRow label="Shows name publicly" value={j.displayNamePublicly === false ? 'No' : 'Yes'} />
+                  <DetailRow label="Wallet points" value={`${(j.walletPoints || 0).toLocaleString()} pts (₹${Math.floor((j.walletPoints || 0) / 10)})`} />
+                  <DetailRow label="Ad commission earned" value={`₹${(j.adCommissionEarnings || 0).toLocaleString()}`} />
 
                   <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
                     <button

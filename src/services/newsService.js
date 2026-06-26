@@ -110,7 +110,17 @@ export async function updateDraft(id, data) {
   await updateDoc(doc(db, 'drafts', id), data)
 }
 
-// Approve: copies the draft into the public `news` collection and marks the draft approved.
+// Approve: copies the draft into the public `news` collection, marks the
+// draft approved, and — for an actual journalist's own report on their own
+// district — credits +10 NewsFlow points to their wallet. RSS items
+// (authorId 'system-rss') and admin direct uploads (authorId 'admin') never
+// earn points; neither does a journalist report whose district doesn't
+// match their own profile (shouldn't normally happen since the submit form
+// and Firestore rules both lock the district field to their own, but this
+// check stays as a second line of defense — e.g. if their registered
+// district changed between submission and approval).
+export const POINTS_PER_APPROVED_REPORT = 10
+
 export async function approveDraft(draftEntry) {
   const { id, ...rest } = draftEntry
   await addDoc(collection(db, 'news'), {
@@ -133,6 +143,15 @@ export async function approveDraft(draftEntry) {
     dislikedBy: [],
     createdAt: serverTimestamp()
   })
+
+  if (rest.authorId && rest.authorId !== 'system-rss' && rest.authorId !== 'admin') {
+    const authorSnap = await getDoc(doc(db, 'users', rest.authorId))
+    if (authorSnap.exists() && authorSnap.data().district === rest.district) {
+      await updateDoc(doc(db, 'users', rest.authorId), {
+        walletPoints: increment(POINTS_PER_APPROVED_REPORT)
+      })
+    }
+  }
   await updateDoc(doc(db, 'drafts', id), { status: 'approved' })
 }
 
@@ -193,6 +212,85 @@ export async function setJournalistVerified(uid, verified) {
 
 export async function setJournalistSuspended(uid, suspended) {
   await updateDoc(doc(db, 'users', uid), { suspended })
+}
+
+// ---------- WALLET / WITHDRAWALS ----------
+export async function createWithdrawalRequest({ journalistId, journalistName, pointsRequested, rupeeAmount }) {
+  await addDoc(collection(db, 'withdrawalRequests'), {
+    journalistId,
+    journalistName,
+    pointsRequested,
+    rupeeAmount,
+    status: 'pending',
+    createdAt: serverTimestamp()
+  })
+}
+
+export function listenToMyWithdrawals(uid, callback) {
+  const q = query(collection(db, 'withdrawalRequests'), where('journalistId', '==', uid))
+  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
+}
+
+export async function listAllWithdrawals() {
+  const snap = await getDocs(query(collection(db, 'withdrawalRequests'), limit(200)))
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+}
+
+// Marking a withdrawal paid deducts the points from the journalist's wallet
+// in the same call, so the wallet balance and payout history can't drift
+// apart (e.g. admin forgetting to also debit the wallet separately).
+export async function markWithdrawalPaid(requestId, journalistId, pointsRequested) {
+  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'paid', paidAt: serverTimestamp() })
+  await updateDoc(doc(db, 'users', journalistId), { walletPoints: increment(-pointsRequested) })
+}
+
+export async function rejectWithdrawal(requestId, reason) {
+  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'rejected', rejectionReason: reason || '' })
+}
+
+// ---------- AD LEADS ----------
+export async function createAdLead(data) {
+  await addDoc(collection(db, 'adLeads'), {
+    ...data,
+    status: 'new',
+    dealAmount: null,
+    commissionAmount: null,
+    commissionPaid: false,
+    createdAt: serverTimestamp()
+  })
+}
+
+export function listenToMyAdLeads(uid, callback) {
+  const q = query(collection(db, 'adLeads'), where('submittedBy', '==', uid))
+  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
+}
+
+export async function listAllAdLeads() {
+  const snap = await getDocs(query(collection(db, 'adLeads'), limit(200)))
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+}
+
+export async function updateAdLeadStatus(id, data) {
+  await updateDoc(doc(db, 'adLeads', id), data)
+}
+
+// Closing a deal credits 10% commission to the journalist's real-rupee
+// earnings ledger (separate from the points-based news wallet — this is
+// actual commission money, not points).
+export async function closeAdLeadWon(lead, dealAmount) {
+  const commission = Math.round(dealAmount * 0.1)
+  await updateDoc(doc(db, 'adLeads', lead.id), {
+    status: 'closed_won',
+    dealAmount,
+    commissionAmount: commission
+  })
+  await updateDoc(doc(db, 'users', lead.submittedBy), {
+    adCommissionEarnings: increment(commission)
+  })
+}
+
+export async function markAdCommissionPaid(leadId) {
+  await updateDoc(doc(db, 'adLeads', leadId), { commissionPaid: true })
 }
 
 // ---------- ADMIN: direct upload + manage published news ----------

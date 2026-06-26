@@ -34,9 +34,13 @@ service cloud.firestore {
     match /districts/{id} { allow read: if true; allow write: if isAdmin(); }
 
     // Drafts: journalists create + read their own (blocked entirely while
-    // suspended, via isJournalist() above); admins read/manage all
+    // suspended, via isJournalist() above); admins read/manage all.
+    // A journalist can only submit for their OWN registered district —
+    // matches the app-side restriction (no district picker shown to them).
     match /drafts/{draftId} {
-      allow create: if isJournalist() && request.resource.data.authorId == request.auth.uid;
+      allow create: if isJournalist()
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.district == myProfile().district;
       allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
       allow update: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid && resource.data.status == 'pending');
       allow delete: if isAdmin();
@@ -44,13 +48,33 @@ service cloud.firestore {
 
     // Users: anyone signed in can read public profile fields via app logic;
     // a user can write their own document EXCEPT the admin-controlled fields
-    // (role, verified, suspended) — those require admin, even for your own doc.
+    // (role, verified, suspended, and the two wallet/earnings fields, which
+    // only get changed by approveDraft/admin actions, never by the user
+    // directly) — those require admin, even for your own doc.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isOwner(uid);
       allow update: if isAdmin()
                     || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks', 'displayNamePublicly']));
+    }
+
+    // Ad leads: a journalist submits leads they've sourced; only admins can
+    // update status/deal amount/commission. A journalist can see only their
+    // own submitted leads; admins see and manage everything.
+    match /adLeads/{leadId} {
+      allow create: if isJournalist() && request.resource.data.submittedBy == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.submittedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // Withdrawal requests: a journalist files their own request once they've
+    // hit the payout threshold (enforced app-side before allowing the
+    // button); only admins mark it paid/rejected.
+    match /withdrawalRequests/{requestId} {
+      allow create: if isJournalist() && request.resource.data.journalistId == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.journalistId == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     match /notifications/{id} {

@@ -3,7 +3,6 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../utils/categories'
-import { ALL_DISTRICTS } from '../utils/districts'
 import { generateNewsDraft, transcribeVoiceNote } from '../services/groq'
 import { uploadImage, uploadAudio, uploadVideo } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
@@ -12,7 +11,7 @@ export default function SubmitNews() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [category, setCategory] = useState('')
-  const [district, setDistrict] = useState(profile?.district || '')
+  const district = profile?.district || ''
   const [text, setText] = useState('')
   const [images, setImages] = useState([])
   const [videoFile, setVideoFile] = useState(null)
@@ -166,10 +165,14 @@ export default function SubmitNews() {
 
         <div className="nf-input-group">
           <label className="nf-label">District</label>
-          <select className="nf-select" value={district} onChange={(e) => setDistrict(e.target.value)}>
-            <option value="">Select district</option>
-            {ALL_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <div style={lockedDistrictStyle}>
+            📍 {profile?.district || 'Not set'}
+          </div>
+          <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginTop: 6 }}>
+            You can only file reports for your own registered district — NewsFlow
+            points are only earned on your own district's news. If you've moved,
+            ask an admin to update your district.
+          </p>
         </div>
 
         <div className="nf-input-group">
@@ -271,6 +274,15 @@ function Toggle({ checked, onChange, disabled }) {
       }} />
     </button>
   )
+}
+
+const lockedDistrictStyle = {
+  border: '1.5px solid var(--nf-line)',
+  borderRadius: 8,
+  padding: '12px 14px',
+  background: 'var(--nf-paper-dim)',
+  fontWeight: 700,
+  color: 'var(--nf-navy)'
 }
 
 const nameToggleRowStyle = {

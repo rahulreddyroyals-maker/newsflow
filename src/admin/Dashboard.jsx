@@ -49,8 +49,14 @@ export default function AdminDashboard() {
         <button className="nf-btn nf-btn-primary nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/upload')}>
           + Upload News Directly
         </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 20 }} onClick={() => navigate('/admin/manage-news')}>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 10 }} onClick={() => navigate('/admin/manage-news')}>
           Edit Published News
+        </button>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginBottom: 10 }} onClick={() => navigate('/admin/ad-leads')}>
+          📢 Local Ad Leads
+        </button>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginBottom: 20 }} onClick={() => navigate('/admin/withdrawals')}>
+          💰 Withdrawal Requests
         </button>
         <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginBottom: 30 }} onClick={() => navigate('/admin/journalists')}>
           Manage Journalists
