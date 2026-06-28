@@ -70,7 +70,7 @@ export default function AdLeadsSection() {
       </div>
 
       <div className="nf-input-group">
-        <label className="nf-label">Business / contact name</label>
+        <label className="nf-label">Business / contact name *</label>
         <input className="nf-input" value={form.businessName} onChange={(e) => update('businessName', e.target.value)} placeholder="e.g. Sri Lakshmi Sweets" />
       </div>
       <div className="nf-input-group">
@@ -78,11 +78,11 @@ export default function AdLeadsSection() {
         <input className="nf-input" value={form.contactName} onChange={(e) => update('contactName', e.target.value)} placeholder="Owner / contact person" />
       </div>
       <div className="nf-input-group">
-        <label className="nf-label">Phone number</label>
+        <label className="nf-label">Phone number *</label>
         <input className="nf-input" type="tel" value={form.contactPhone} onChange={(e) => update('contactPhone', e.target.value)} placeholder="10-digit mobile number" />
       </div>
       <div className="nf-input-group">
-        <label className="nf-label">Type of ad</label>
+        <label className="nf-label">Type of ad *</label>
         <select className="nf-select" value={form.adType} onChange={(e) => update('adType', e.target.value)}>
           <option value="">Select type</option>
           {AD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -93,10 +93,18 @@ export default function AdLeadsSection() {
         <textarea className="nf-textarea" rows={3} value={form.details} onChange={(e) => update('details', e.target.value)} placeholder="Anything useful — what they want, timing, budget hints, etc." />
       </div>
 
-      {error && <p style={{ color: 'var(--nf-danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-      {success && <p style={{ color: 'var(--nf-success)', fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{success}</p>}
+      {error && (
+        <div style={{ background: '#FBE7E5', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <p style={{ color: 'var(--nf-danger)', fontSize: 13, fontWeight: 700 }}>{error}</p>
+        </div>
+      )}
+      {success && (
+        <div style={{ background: '#E3F6EA', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <p style={{ color: 'var(--nf-success)', fontSize: 13, fontWeight: 700 }}>{success}</p>
+        </div>
+      )}
 
-      <button className="nf-btn nf-btn-flow nf-btn-block" disabled={busy} onClick={handleSubmit} style={{ marginBottom: 24 }}>
+      <button className="nf-btn nf-btn-flow nf-btn-block" disabled={busy} onClick={handleSubmit} style={{ marginBottom: 40 }}>
         {busy ? 'Submitting…' : 'Submit Lead'}
       </button>
 

@@ -23,6 +23,14 @@ export default function SubmitNews() {
   const [error, setError] = useState('')
   const [showNameThisPost, setShowNameThisPost] = useState(profile?.displayNamePublicly !== false)
 
+  // Filled either by "Generate AI Draft" or typed by hand below — AI failing
+  // (wrong/expired key, network issue, etc.) no longer blocks submission;
+  // the journalist can always just type these three fields themselves and
+  // continue, the same way the admin's Upload News page already works.
+  const [headline, setHeadline] = useState('')
+  const [summary, setSummary] = useState('')
+  const [article, setArticle] = useState('')
+
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
 
@@ -80,6 +88,10 @@ export default function SubmitNews() {
     setVideoFile(file)
   }
 
+  // Assistive only now — fills the headline/summary/article fields below on
+  // success, but never blocks the journalist from typing those by hand
+  // instead if this fails (wrong API key, network issue, etc.) or they'd
+  // simply rather write it themselves.
   async function handleGenerateDraft() {
     setError('')
     if (!category || !district) return setError('Please select category and district first.')
@@ -88,7 +100,6 @@ export default function SubmitNews() {
     setBusy(true)
     try {
       let rawText = text.trim()
-      let transcriptionWarning = ''
 
       if (audioBlob) {
         setBusyLabel('Transcribing voice note…')
@@ -96,14 +107,36 @@ export default function SubmitNews() {
           const transcript = await transcribeVoiceNote(audioBlob, profile?.language === 'en' ? 'en' : 'te')
           rawText = [rawText, transcript].filter(Boolean).join('\n\n')
         } catch (err) {
-          transcriptionWarning = 'Voice transcription failed, continuing with your typed notes only. '
           if (!rawText) {
-            throw new Error('Voice transcription failed and there are no typed notes to fall back on. Please type a few lines about the report, or try recording again.')
+            throw new Error('Voice transcription failed and there are no typed notes to fall back on. Type a few lines below, or try recording again.')
           }
+          setError('Voice transcription failed, used your typed notes only for this draft. ')
         }
       }
 
-      setBusyLabel('Uploading photos…')
+      setBusyLabel('Writing AI draft…')
+      const language = profile?.language === 'en' ? 'English' : 'Telugu'
+      const draft = await generateNewsDraft({ rawText, language, category, district })
+      setHeadline(draft.headline || '')
+      setSummary(draft.summary || '')
+      setArticle(draft.article || '')
+    } catch (err) {
+      setError((prev) => (prev ? prev + ' ' : '') + (err.message || 'AI draft generation failed. You can still type the headline/summary/article by hand below and continue.'))
+    } finally {
+      setBusy(false)
+      setBusyLabel('')
+    }
+  }
+
+  async function handleContinue() {
+    setError('')
+    if (!category || !district) return setError('Select category first.')
+    if (!headline.trim() || !article.trim()) {
+      return setError('Headline and full article are required — generate a draft above or type them in yourself.')
+    }
+    setBusy(true)
+    setBusyLabel('Uploading photos…')
+    try {
       const imageUrls = []
       for (const file of images) {
         imageUrls.push(await uploadImage(file))
@@ -121,16 +154,13 @@ export default function SubmitNews() {
         audioUrl = await uploadAudio(audioBlob)
       }
 
-      setBusyLabel('Writing AI draft…')
-      const language = profile?.language === 'en' ? 'English' : 'Telugu'
-      const draft = await generateNewsDraft({ rawText, language, category, district })
-
       navigate('/journalist/preview', {
         state: {
-          ...draft,
-          transcriptionWarning,
+          headline,
+          summary,
+          article,
           showNameThisPost,
-          rawText,
+          rawText: text.trim(),
           category,
           district,
           images: imageUrls,
@@ -140,7 +170,7 @@ export default function SubmitNews() {
         }
       })
     } catch (err) {
-      setError(err.message || 'Something went wrong generating the draft. Please try again.')
+      setError(err.message || 'Something went wrong. Please try again.')
     } finally {
       setBusy(false)
       setBusyLabel('')
@@ -239,7 +269,7 @@ export default function SubmitNews() {
           <label className="nf-label">Write your report notes</label>
           <textarea
             className="nf-textarea"
-            placeholder="What happened, where, who's involved, when — write it in your own words, AI will turn it into a clean article."
+            placeholder="What happened, where, who's involved, when — write it in your own words, AI will turn it into a clean article below."
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -247,8 +277,30 @@ export default function SubmitNews() {
 
         {error && <p style={{ color: 'var(--nf-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
-        <button className="nf-btn nf-btn-flow nf-btn-block" disabled={busy} onClick={handleGenerateDraft} style={{ marginBottom: 30 }}>
+        <button className="nf-btn nf-btn-flow nf-btn-block" disabled={busy} onClick={handleGenerateDraft} style={{ marginBottom: 22 }}>
           {busy ? busyLabel || 'Working…' : '✨ Generate AI Draft'}
+        </button>
+
+        <div style={{ paddingTop: 6, borderTop: '1px dashed var(--nf-line)' }}>
+          <p style={{ fontSize: 12, color: 'var(--nf-ink-faint)', margin: '14px 0 6px' }}>
+            Filled automatically above, or just type these yourself — either way works.
+          </p>
+          <div className="nf-input-group">
+            <label className="nf-label">Headline</label>
+            <input className="nf-input" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Type a headline if AI didn't generate one" />
+          </div>
+          <div className="nf-input-group">
+            <label className="nf-label">Summary</label>
+            <textarea className="nf-textarea" rows={2} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="A short 1-2 sentence summary" />
+          </div>
+          <div className="nf-input-group">
+            <label className="nf-label">Full article</label>
+            <textarea className="nf-textarea" rows={7} value={article} onChange={(e) => setArticle(e.target.value)} placeholder="The full report, in your own words" />
+          </div>
+        </div>
+
+        <button className="nf-btn nf-btn-primary nf-btn-block" disabled={busy} onClick={handleContinue} style={{ marginBottom: 30 }}>
+          {busy ? busyLabel || 'Working…' : 'Continue to Review →'}
         </button>
       </div>
     </div>

@@ -78,7 +78,13 @@ export default function JournalistDashboard() {
             { id: 'ads', label: '📢 Local Ads' },
             { id: 'guidelines', label: 'Guidelines' }
           ].map((s) => (
-            <button key={s.id} className={`nf-chip ${section === s.id ? 'active' : ''}`} onClick={() => setSection(s.id)}>{s.label}</button>
+            <button
+              key={s.id}
+              className={`nf-chip ${section === s.id ? 'active' : ''}`}
+              onClick={(e) => { setSection(s.id); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }) }}
+            >
+              {s.label}
+            </button>
           ))}
         </div>
       </div>

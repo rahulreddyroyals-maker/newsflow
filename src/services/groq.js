@@ -23,6 +23,9 @@ const TEXT_MODEL = 'llama-3.3-70b-versatile'
 const TRANSCRIBE_MODEL = 'whisper-large-v3'
 
 async function groqChat(systemPrompt, userPrompt) {
+  if (!GROQ_API_KEY) {
+    throw new Error('Groq API key is missing. Check VITE_GROQ_API_KEY in your .env file, then rebuild and redeploy — env vars are baked in at build time, so editing .env alone does nothing until you rebuild.')
+  }
   const res = await fetch(`${GROQ_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -40,6 +43,9 @@ async function groqChat(systemPrompt, userPrompt) {
   })
   if (!res.ok) {
     const errText = await res.text()
+    if (res.status === 401) {
+      throw new Error(`Groq rejected this API key as invalid (401). Generate a fresh key at console.groq.com/keys, update VITE_GROQ_API_KEY in .env, then rebuild and redeploy. Raw response: ${errText}`)
+    }
     throw new Error(`Groq request failed (${res.status}): ${errText}`)
   }
   const data = await res.json()
@@ -83,6 +89,9 @@ export async function translateDraft({ headline, summary, article }, targetLangu
 
 // Sends a recorded voice note (Blob) to Groq's hosted Whisper model and gets text back.
 async function callTranscribe(audioBlob, { language, includeLanguage }) {
+  if (!GROQ_API_KEY) {
+    throw new Error('Groq API key is missing. Check VITE_GROQ_API_KEY in your .env file, then rebuild and redeploy.')
+  }
   const form = new FormData()
   form.append('file', audioBlob, 'voice-note.webm')
   form.append('model', TRANSCRIBE_MODEL)

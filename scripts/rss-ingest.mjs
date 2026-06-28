@@ -196,6 +196,23 @@ async function ingestNewsData(counters) {
 }
 
 async function main() {
+  if (!GROQ_API_KEY) {
+    console.error('GROQ_API_KEY secret is missing — every item would fail at the rewrite step. Add it under repo Settings → Secrets and variables → Actions, then re-run.')
+    process.exit(1)
+  }
+  // Quick sanity check against Groq before touching any feeds — catches a
+  // revoked/invalid key in one request instead of failing silently on every
+  // single item (which previously looked exactly like "no RSS data showing
+  // up at all," when actually every item WAS being fetched, just failing at
+  // the AI-rewrite step and getting silently skipped).
+  try {
+    await groqChat('Reply with the single word: ok', 'ping')
+  } catch (err) {
+    console.error(`Groq API key check failed — this is almost certainly why no drafts have been appearing: ${err.message}`)
+    console.error("Fix: generate a fresh key at console.groq.com/keys, then update the GROQ_API_KEY secret in this repo (Settings -> Secrets and variables -> Actions). Also update VITE_GROQ_API_KEY in the app's .env and redeploy -- they need to be the same valid key.")
+    process.exit(1)
+  }
+
   const counters = { queued: 0, skipped: 0, errors: 0 }
   for (const feed of RSS_FEEDS) {
     await ingestFeed(feed, counters)
