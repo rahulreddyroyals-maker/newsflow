@@ -5,9 +5,17 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function myRole() { return myProfile().role; }
+    // .get(key, default) instead of direct dot-access everywhere below —
+    // accounts created before a given field existed (role/suspended/district
+    // were each added at different points) simply don't have it in Firestore
+    // yet. Direct access to a missing map key throws an evaluation error,
+    // and ANY error during rule evaluation is treated as a silent denial —
+    // which is exactly what caused "permission-denied" for journalists whose
+    // accounts predate the `suspended` field, even though nothing was
+    // actually wrong with their account.
+    function myRole() { return myProfile().get('role', ''); }
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
-    function isJournalist() { return isSignedIn() && myRole() == 'journalist' && myProfile().suspended != true; }
+    function isJournalist() { return isSignedIn() && myRole() == 'journalist' && myProfile().get('suspended', false) != true; }
 
     // Public, read-only published news feed — EXCEPT likedBy/dislikedBy,
     // which any signed-in reader can toggle (everything else stays admin-only).
@@ -40,7 +48,7 @@ service cloud.firestore {
     match /drafts/{draftId} {
       allow create: if isJournalist()
                     && request.resource.data.authorId == request.auth.uid
-                    && request.resource.data.district == myProfile().district;
+                    && request.resource.data.district == myProfile().get('district', '');
       allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
       allow update: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid && resource.data.status == 'pending');
       allow delete: if isAdmin();
