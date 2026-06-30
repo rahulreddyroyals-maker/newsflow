@@ -56,7 +56,7 @@ service cloud.firestore {
       allow create: if isOwner(uid);
       allow update: if isAdmin()
                     || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks', 'displayNamePublicly']));
+                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks', 'displayNamePublicly', 'photoUrl']));
     }
 
     // Ad leads: a journalist submits leads they've sourced; only admins can

@@ -8,6 +8,20 @@ import { categoryLabel } from '../utils/categories'
 import ImageWatermark from '../components/ImageWatermark'
 import CommentsPanel from '../components/CommentsPanel'
 
+const ANONYMOUS_BYLINES = new Set(['NewsFlow', 'NewsFlow Citizen Journalist', 'NewsFlow Reporter'])
+const NON_PROFILE_AUTHOR_IDS = new Set(['system-rss', 'admin'])
+
+// A byline only links to a public profile when it's a real, named journalist
+// who chose to show their name on THIS report — never for RSS items, admin
+// uploads, or a journalist who posted that particular report anonymously
+// (even though the underlying authorId is still theirs, linking it would
+// defeat the point of the anonymity toggle).
+function isLinkableByline(news) {
+  return news.authorId
+    && !NON_PROFILE_AUTHOR_IDS.has(news.authorId)
+    && !ANONYMOUS_BYLINES.has(news.authorName)
+}
+
 const BackIcon = (p) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" {...p}><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
 )
@@ -143,7 +157,11 @@ export default function NewsDetail() {
         <div style={metaStyle}>
           <span>{news.district}</span>
           <span>•</span>
-          <span>{news.authorName}</span>
+          <span>
+            {isLinkableByline(news) ? (
+              <button onClick={() => navigate(`/journalist-profile/${news.authorId}`)} style={authorLinkStyle}>{news.authorName}</button>
+            ) : news.authorName}
+          </span>
           <span>•</span>
           <span>{news.views || 0} views</span>
         </div>
@@ -174,6 +192,14 @@ const backBtnStyle = {
 const dotsRow = { position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }
 const dotStyle = { width: 6, height: 6, borderRadius: '50%', background: '#fff' }
 const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16 }
+const authorLinkStyle = {
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  font: 'inherit',
+  color: 'var(--nf-blue)',
+  fontWeight: 700
+}
 const actionBarStripStyle = {
   display: 'flex',
   justifyContent: 'space-between',

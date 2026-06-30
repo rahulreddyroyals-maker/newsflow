@@ -53,6 +53,11 @@ export default function AIDraftPreview() {
   async function handleSubmit() {
     setBusy(true)
     setError('')
+    if (draft.district !== profile?.district) {
+      setError(`This draft's district (${draft.district}) doesn't match your registered district (${profile?.district}) — Firestore will reject it. Go back and resubmit from the form, which locks the district to your own automatically.`)
+      setBusy(false)
+      return
+    }
     try {
       await createDraft({
         headline: draft.headline,
@@ -72,7 +77,7 @@ export default function AIDraftPreview() {
       })
       navigate('/journalist', { replace: true })
     } catch (err) {
-      setError('Could not submit. Please try again.')
+      setError('Could not submit: ' + (err.message || 'unknown error') + ' — if this says permission-denied, the Firestore rules likely need redeploying.')
     } finally {
       setBusy(false)
     }

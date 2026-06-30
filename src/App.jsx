@@ -11,6 +11,7 @@ import Register from './pages/Register'
 import Home from './pages/Home'
 import Search from './pages/Search'
 import NewsDetail from './pages/NewsDetail'
+import JournalistProfile from './pages/JournalistProfile'
 import Bookmarks from './pages/Bookmarks'
 import Notifications from './pages/Notifications'
 import Profile from './pages/Profile'
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="/home" element={<Home />} />
         <Route path="/search" element={<Search />} />
         <Route path="/news/:id" element={<NewsDetail />} />
+        <Route path="/journalist-profile/:uid" element={<JournalistProfile />} />
         <Route path="/bookmarks" element={<Bookmarks />} />
         <Route path="/notifications" element={<Notifications />} />
 

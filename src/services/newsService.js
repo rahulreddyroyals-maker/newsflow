@@ -185,6 +185,38 @@ export async function uploadVideo(file, pathPrefix = 'news_videos') {
   return getDownloadURL(storageRef)
 }
 
+export async function uploadProfilePhoto(file, uid) {
+  const path = `profile_photos/${uid}_${Date.now()}_${file.name}`
+  const storageRef = ref(storage, path)
+  await uploadBytes(storageRef, file)
+  return getDownloadURL(storageRef)
+}
+
+// ---------- PUBLIC JOURNALIST PROFILE ----------
+// Used by the public profile page — only returns reports where the
+// journalist chose to show their name (see SubmitNews's per-post toggle).
+// Anonymous-by-choice reports stay anonymous everywhere, including here.
+export async function getJournalistPublicProfile(uid) {
+  const snap = await getDoc(doc(db, 'users', uid))
+  if (!snap.exists()) return null
+  const data = snap.data()
+  return {
+    uid,
+    name: data.name,
+    photoUrl: data.photoUrl || null,
+    district: data.district,
+    verified: data.verified
+  }
+}
+
+export async function getJournalistPublicNews(authorId, authorName) {
+  const snap = await getDocs(
+    query(collection(db, 'news'), where('status', '==', 'approved'), where('authorId', '==', authorId), limit(200))
+  )
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .filter((n) => n.authorName === authorName) // excludes reports they chose to publish anonymously under a different displayed name
+}
+
 // ---------- ADMIN ANALYTICS ----------
 export async function getDashboardCounts() {
   const [newsSnap, pendingSnap, journalistsSnap, readersSnap] = await Promise.all([

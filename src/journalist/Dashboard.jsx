@@ -1,8 +1,8 @@
 // src/journalist/Dashboard.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToMyDrafts, updateUserProfile } from '../services/newsService'
+import { listenToMyDrafts, updateUserProfile, uploadProfilePhoto } from '../services/newsService'
 import WalletSection from './WalletSection'
 import AdLeadsSection from './AdLeadsSection'
 import GuidelinesSection from './GuidelinesSection'
@@ -15,6 +15,30 @@ export default function JournalistDashboard() {
   const [error, setError] = useState('')
   const [savingNameToggle, setSavingNameToggle] = useState(false)
   const [section, setSection] = useState('reports')
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const photoInputRef = useRef(null)
+
+  async function handlePhotoPick(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoError('')
+    if (file.size > 4 * 1024 * 1024) {
+      setPhotoError('Photo is too large — keep it under 4MB.')
+      e.target.value = ''
+      return
+    }
+    setPhotoBusy(true)
+    try {
+      const url = await uploadProfilePhoto(file, user.uid)
+      await updateUserProfile(user.uid, { photoUrl: url })
+      refreshProfile()
+    } catch (err) {
+      setPhotoError('Could not upload photo: ' + err.message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -61,6 +85,25 @@ export default function JournalistDashboard() {
           </div>
           {!profile?.verified && <span className="nf-badge nf-badge-pending">Verification pending</span>}
         </div>
+
+        <div style={profileRowStyle}>
+          <button onClick={() => photoInputRef.current?.click()} style={{ border: 'none', background: 'none', padding: 0, position: 'relative' }}>
+            {profile?.photoUrl ? (
+              <img src={profile.photoUrl} alt="" style={avatarStyle} />
+            ) : (
+              <div style={avatarFallbackStyle}>{profile?.name?.[0]?.toUpperCase() || 'N'}</div>
+            )}
+            <span style={editBadgeStyle}>{photoBusy ? '…' : '✎'}</span>
+          </button>
+          <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoPick} style={{ display: 'none' }} />
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--nf-navy)' }}>{profile?.name}</p>
+            <button onClick={() => navigate(`/journalist-profile/${user.uid}`)} style={publicProfileLinkStyle}>
+              View my public profile →
+            </button>
+          </div>
+        </div>
+        {photoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12, marginTop: 4 }}>{photoError}</p>}
 
         {suspended && (
           <div style={{ background: '#FBE7E5', borderRadius: 10, padding: 12, marginTop: 14 }}>
@@ -170,6 +213,54 @@ function Toggle({ checked, onChange, disabled }) {
       }} />
     </button>
   )
+}
+
+const profileRowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  marginTop: 14
+}
+const avatarStyle = {
+  width: 52,
+  height: 52,
+  borderRadius: '50%',
+  objectFit: 'cover'
+}
+const avatarFallbackStyle = {
+  width: 52,
+  height: 52,
+  borderRadius: '50%',
+  background: 'var(--nf-flow)',
+  color: '#fff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 20,
+  fontWeight: 800
+}
+const editBadgeStyle = {
+  position: 'absolute',
+  bottom: -2,
+  right: -2,
+  width: 18,
+  height: 18,
+  borderRadius: '50%',
+  background: 'var(--nf-navy)',
+  color: '#fff',
+  fontSize: 10,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '2px solid var(--nf-paper)'
+}
+const publicProfileLinkStyle = {
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  color: 'var(--nf-blue)',
+  fontSize: 12.5,
+  fontWeight: 700
 }
 
 const nameToggleRowStyle = {
