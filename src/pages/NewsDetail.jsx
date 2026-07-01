@@ -7,6 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { categoryLabel } from '../utils/categories'
 import ImageWatermark from '../components/ImageWatermark'
 import CommentsPanel from '../components/CommentsPanel'
+import { ThumbsUpIcon, ThumbsDownIcon, CommentIcon, SaveIcon, WhatsAppIcon } from '../components/ActionIcons'
 
 const ANONYMOUS_BYLINES = new Set(['NewsFlow', 'NewsFlow Citizen Journalist', 'NewsFlow Reporter'])
 const NON_PROFILE_AUTHOR_IDS = new Set(['system-rss', 'admin'])
@@ -33,7 +34,6 @@ export default function NewsDetail() {
   const { lang } = useLanguage()
   const [news, setNews] = useState(null)
   const [imgIndex, setImgIndex] = useState(0)
-  const [justCopied, setJustCopied] = useState(false)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
 
@@ -86,15 +86,15 @@ export default function NewsDetail() {
     await setReaction(id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
+  // The action bar icon is specifically the WhatsApp mark now, so tapping it
+  // should open WhatsApp directly (wa.me works as a plain link on both
+  // mobile and desktop, opening the app or WhatsApp Web) rather than a
+  // generic share sheet that might suggest a different destination than
+  // what the icon promised.
   function handleShare() {
-    const shareData = { title: headline, text: news.summary, url: window.location.href }
-    if (navigator.share) {
-      navigator.share(shareData).catch(() => {})
-    } else {
-      navigator.clipboard.writeText(window.location.href)
-      setJustCopied(true)
-      setTimeout(() => setJustCopied(false), 1600)
-    }
+    const shareUrl = window.location.href
+    const text = `${headline}\n${shareUrl}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
   }
 
   const videoIsPortrait = news.videoUrl && isPortraitVideo === true
@@ -144,11 +144,26 @@ export default function NewsDetail() {
           the headline/text — replaces the old split between top-corner
           icons and a separate row further down the page. */}
       <div style={actionBarStripStyle}>
-        <BarButton onClick={() => handleReaction('like')} active={isLiked} icon="👍" label={news.likedBy?.length || 'Like'} />
-        <BarButton onClick={() => handleReaction('dislike')} active={isDisliked} icon="👎" label={news.dislikedBy?.length || 'Dislike'} />
-        <BarButton onClick={() => setCommentsOpen(true)} icon="💬" label="Comment" />
-        <BarButton onClick={handleBookmark} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" />
-        <BarButton onClick={handleShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} />
+        <BarButton onClick={() => handleReaction('like')}>
+          <ThumbsUpIcon active={isLiked} style={{ color: isLiked ? 'var(--nf-blue)' : 'var(--nf-navy)' }} />
+          <BarLabel>{news.likedBy?.length || 'Like'}</BarLabel>
+        </BarButton>
+        <BarButton onClick={() => handleReaction('dislike')}>
+          <ThumbsDownIcon active={isDisliked} style={{ color: isDisliked ? 'var(--nf-danger)' : 'var(--nf-navy)' }} />
+          <BarLabel>{news.dislikedBy?.length || 'Dislike'}</BarLabel>
+        </BarButton>
+        <BarButton onClick={() => setCommentsOpen(true)}>
+          <CommentIcon style={{ color: 'var(--nf-navy)' }} />
+          <BarLabel>Comment</BarLabel>
+        </BarButton>
+        <BarButton onClick={handleBookmark}>
+          <SaveIcon active={isBookmarked} style={{ color: isBookmarked ? 'var(--nf-orange)' : 'var(--nf-navy)' }} />
+          <BarLabel>Save</BarLabel>
+        </BarButton>
+        <BarButton onClick={handleShare}>
+          <WhatsAppIcon style={{ color: '#25D366' }} />
+          <BarLabel>Share</BarLabel>
+        </BarButton>
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
@@ -174,13 +189,16 @@ export default function NewsDetail() {
   )
 }
 
-function BarButton({ onClick, icon, label, active }) {
+function BarButton({ onClick, children }) {
   return (
     <button onClick={onClick} style={barBtnStyle}>
-      <span style={{ fontSize: 19, filter: active ? 'none' : 'grayscale(0.3) opacity(0.85)' }}>{icon}</span>
-      <span style={{ fontSize: 10, color: 'var(--nf-navy)', fontWeight: 700, marginTop: 2 }}>{label}</span>
+      {children}
     </button>
   )
+}
+
+function BarLabel({ children }) {
+  return <span style={{ fontSize: 10, color: 'var(--nf-navy)', fontWeight: 700, marginTop: 3 }}>{children}</span>
 }
 
 const backBtnStyle = {

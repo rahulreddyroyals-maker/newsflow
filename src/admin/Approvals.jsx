@@ -29,7 +29,11 @@ export default function Approvals() {
   function startEdit(d) {
     setEditingId(d.id)
     setExpandedId(d.id) // editing implies seeing the full article
-    setEdits({ headline: d.headline, summary: d.summary, article: d.article, images: d.images || [], videoUrl: d.videoUrl || null })
+    setEdits({
+      headline: d.headline, summary: d.summary, article: d.article,
+      headlineEn: d.headlineEn || '', summaryEn: d.summaryEn || '', articleEn: d.articleEn || '',
+      images: d.images || [], videoUrl: d.videoUrl || null
+    })
   }
 
   async function handleImageReplace(file) {
@@ -160,6 +164,44 @@ export default function Approvals() {
                     <p style={{ fontSize: 13.5, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{d.article}</p>
                   )}
                   {d.audioUrl && <audio controls src={d.audioUrl} style={{ width: '100%', marginTop: 10 }} />}
+
+                  {(d.headlineEn || editing) && (
+                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed var(--nf-line)' }}>
+                      <p className="nf-label" style={{ marginBottom: 8 }}>English version {!d.headlineEn && !editing ? '(none submitted)' : ''}</p>
+                      {editing ? (
+                        <>
+                          <input
+                            className="nf-input"
+                            style={{ fontWeight: 700, marginBottom: 8 }}
+                            placeholder="Headline (EN)"
+                            value={edits.headlineEn}
+                            onChange={(e) => setEdits((x) => ({ ...x, headlineEn: e.target.value }))}
+                          />
+                          <textarea
+                            className="nf-textarea"
+                            rows={2}
+                            placeholder="Summary (EN)"
+                            style={{ marginBottom: 8 }}
+                            value={edits.summaryEn}
+                            onChange={(e) => setEdits((x) => ({ ...x, summaryEn: e.target.value }))}
+                          />
+                          <textarea
+                            className="nf-textarea"
+                            rows={6}
+                            placeholder="Full article (EN)"
+                            value={edits.articleEn}
+                            onChange={(e) => setEdits((x) => ({ ...x, articleEn: e.target.value }))}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{d.headlineEn}</p>
+                          <p style={{ fontSize: 13, color: 'var(--nf-ink-soft)', marginBottom: 8 }}>{d.summaryEn}</p>
+                          <p style={{ fontSize: 13.5, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{d.articleEn}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

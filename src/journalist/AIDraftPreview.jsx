@@ -53,8 +53,11 @@ export default function AIDraftPreview() {
   async function handleSubmit() {
     setBusy(true)
     setError('')
-    if (draft.district !== profile?.district) {
-      setError(`This draft's district (${draft.district}) doesn't match your registered district (${profile?.district}) — Firestore will reject it. Go back and resubmit from the form, which locks the district to your own automatically.`)
+    const draftDistrict = (draft.district || '').trim()
+    const profileDistrict = (profile?.district || '').trim()
+    if (draftDistrict !== profileDistrict) {
+      console.error('District mismatch blocking submit:', { draftDistrict, profileDistrict })
+      setError(`This draft's district ("${draftDistrict}") doesn't exactly match your registered district ("${profileDistrict}") — Firestore will reject it. Go back and resubmit from the form, which locks the district to your own automatically. If these look identical to you, there may be invisible whitespace — ask an admin to re-save your district in Manage Journalists.`)
       setBusy(false)
       return
     }
@@ -77,7 +80,13 @@ export default function AIDraftPreview() {
       })
       navigate('/journalist', { replace: true })
     } catch (err) {
-      setError('Could not submit: ' + (err.message || 'unknown error') + ' — if this says permission-denied, the Firestore rules likely need redeploying.')
+      console.error('createDraft failed:', err)
+      const isPermissionError = err.code === 'permission-denied' || /permission/i.test(err.message || '')
+      setError(
+        isPermissionError
+          ? `Could not submit: Firestore rejected this with "permission-denied." This almost always means the rules deployed to your live Firebase project are out of date — run "firebase deploy --only firestore:rules" from the project folder, then try again.`
+          : 'Could not submit: ' + (err.message || 'unknown error')
+      )
     } finally {
       setBusy(false)
     }

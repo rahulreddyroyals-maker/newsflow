@@ -6,9 +6,8 @@ import {
   signOut,
   onAuthStateChanged
 } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../services/firebase'
-import { getUserProfile } from '../services/newsService'
 
 const AuthContext = createContext(null)
 
@@ -19,18 +18,33 @@ export function AuthProvider({ children }) {
   const [guestMode, setGuestMode] = useState(false)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubProfile = null
+
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
+      unsubProfile?.()
+
       if (firebaseUser) {
-        const p = await getUserProfile(firebaseUser.uid)
-        setProfile(p)
+        // Live listener instead of a one-time fetch — anything an admin
+        // changes server-side while this session is open (wallet points
+        // credited on approval, verified/suspended status, district
+        // corrections, etc.) now reflects immediately instead of requiring
+        // the user to manually refresh or log out and back in.
+        unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
+          setProfile(snap.exists() ? { uid: firebaseUser.uid, ...snap.data() } : null)
+          setLoading(false)
+        }, () => setLoading(false))
         setGuestMode(false)
       } else {
         setProfile(null)
+        setLoading(false)
       }
-      setLoading(false)
     })
-    return unsub
+
+    return () => {
+      unsubAuth()
+      unsubProfile?.()
+    }
   }, [])
 
   async function register({ name, email, phone, password, role, language, district }) {
@@ -64,9 +78,10 @@ export function AuthProvider({ children }) {
     setGuestMode(true)
   }
 
-  function refreshProfile() {
-    if (user) getUserProfile(user.uid).then(setProfile)
-  }
+  // Kept for compatibility with existing call sites — now a no-op in
+  // practice since the live onSnapshot listener above already keeps
+  // `profile` in sync automatically. Safe to leave both in place.
+  function refreshProfile() {}
 
   const value = {
     user,

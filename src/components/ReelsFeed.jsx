@@ -6,6 +6,7 @@ import { categoryLabel } from '../utils/categories'
 import { toggleBookmark, incrementViewCount, setReaction } from '../services/newsService'
 import ImageWatermark from './ImageWatermark'
 import CommentsPanel from './CommentsPanel'
+import { ThumbsUpIcon, ThumbsDownIcon, CommentIcon, SaveIcon, WhatsAppIcon } from './ActionIcons'
 
 // Full-screen, one-story-per-screen vertical feed — the primary way stories
 // are read from Home now. Scroll-snap does the heavy lifting (no gesture
@@ -43,7 +44,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
   const { user, profile, refreshProfile } = useAuth()
   const { lang } = useLanguage()
   const [news, setNews] = useState(initialNews)
-  const [justCopied, setJustCopied] = useState(false)
   const [seen, setSeen] = useState(false)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null)
   const slideRef = useRef(null)
@@ -104,15 +104,12 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
     await setReaction(news.id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
+  // Same reasoning as NewsDetail's handleShare — the icon is specifically
+  // WhatsApp now, so the action opens it directly via wa.me.
   function handleShare() {
-    const shareData = { title: headline, text: summary, url: `${window.location.origin}/news/${news.id}` }
-    if (navigator.share) {
-      navigator.share(shareData).catch(() => {})
-    } else {
-      navigator.clipboard.writeText(shareData.url)
-      setJustCopied(true)
-      setTimeout(() => setJustCopied(false), 1600)
-    }
+    const shareUrl = `${window.location.origin}/news/${news.id}`
+    const text = `${headline}\n${shareUrl}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
   }
 
   const fullBleed = news.videoUrl && isPortraitVideo === true
@@ -160,7 +157,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             <ActionBar
               isLiked={isLiked} isDisliked={isDisliked} isBookmarked={isBookmarked}
               likeCount={news.likedBy?.length} dislikeCount={news.dislikedBy?.length}
-              justCopied={justCopied}
               onLike={() => handleReaction('like')} onDislike={() => handleReaction('dislike')}
               onComment={onOpenComments} onSave={handleBookmark} onShare={handleShare}
               light
@@ -175,7 +171,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             <ActionBar
               isLiked={isLiked} isDisliked={isDisliked} isBookmarked={isBookmarked}
               likeCount={news.likedBy?.length} dislikeCount={news.dislikedBy?.length}
-              justCopied={justCopied}
               onLike={() => handleReaction('like')} onDislike={() => handleReaction('dislike')}
               onComment={onOpenComments} onSave={handleBookmark} onShare={handleShare}
             />
@@ -192,26 +187,44 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
 // Single horizontal row — Like · Dislike · Comment · Save · Share — used
 // both as an overlay strip (full-bleed portrait video) and as an in-flow
 // strip between the media and the article text (everything else).
-function ActionBar({ isLiked, isDisliked, isBookmarked, likeCount, dislikeCount, justCopied, onLike, onDislike, onComment, onSave, onShare, light }) {
+function ActionBar({ isLiked, isDisliked, isBookmarked, likeCount, dislikeCount, onLike, onDislike, onComment, onSave, onShare, light }) {
   const color = light ? '#fff' : 'var(--nf-navy)'
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-      <BarButton onClick={onLike} active={isLiked} icon="👍" label={likeCount || 'Like'} color={color} />
-      <BarButton onClick={onDislike} active={isDisliked} icon="👎" label={dislikeCount || 'Dislike'} color={color} />
-      <BarButton onClick={onComment} icon="💬" label="Comment" color={color} />
-      <BarButton onClick={onSave} active={isBookmarked} icon={isBookmarked ? '★' : '☆'} label="Save" color={color} />
-      <BarButton onClick={onShare} icon="↗" label={justCopied ? 'Copied!' : 'Share'} color={color} />
+      <BarButton onClick={onLike} color={color}>
+        <ThumbsUpIcon active={isLiked} style={{ color: isLiked ? 'var(--nf-blue)' : color }} />
+        <BarLabel color={color}>{likeCount || 'Like'}</BarLabel>
+      </BarButton>
+      <BarButton onClick={onDislike} color={color}>
+        <ThumbsDownIcon active={isDisliked} style={{ color: isDisliked ? 'var(--nf-danger)' : color }} />
+        <BarLabel color={color}>{dislikeCount || 'Dislike'}</BarLabel>
+      </BarButton>
+      <BarButton onClick={onComment} color={color}>
+        <CommentIcon style={{ color }} />
+        <BarLabel color={color}>Comment</BarLabel>
+      </BarButton>
+      <BarButton onClick={onSave} color={color}>
+        <SaveIcon active={isBookmarked} style={{ color: isBookmarked ? 'var(--nf-orange)' : color }} />
+        <BarLabel color={color}>Save</BarLabel>
+      </BarButton>
+      <BarButton onClick={onShare} color={color}>
+        <WhatsAppIcon style={{ color: '#25D366' }} />
+        <BarLabel color={color}>Share</BarLabel>
+      </BarButton>
     </div>
   )
 }
 
-function BarButton({ onClick, icon, label, active, color }) {
+function BarButton({ onClick, children }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onClick() }} style={barBtnStyle}>
-      <span style={{ fontSize: 19, filter: active ? 'none' : 'grayscale(0.3) opacity(0.85)' }}>{icon}</span>
-      <span style={{ fontSize: 10, color, fontWeight: 700, marginTop: 2 }}>{label}</span>
+      {children}
     </button>
   )
+}
+
+function BarLabel({ color, children }) {
+  return <span style={{ fontSize: 10, color, fontWeight: 700, marginTop: 3 }}>{children}</span>
 }
 
 const overlayStyle = {
