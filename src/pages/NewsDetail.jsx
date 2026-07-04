@@ -12,11 +12,6 @@ import { ThumbsUpIcon, ThumbsDownIcon, CommentIcon, SaveIcon, WhatsAppIcon } fro
 const ANONYMOUS_BYLINES = new Set(['NewsFlow', 'NewsFlow Citizen Journalist', 'NewsFlow Reporter'])
 const NON_PROFILE_AUTHOR_IDS = new Set(['system-rss', 'admin'])
 
-// A byline only links to a public profile when it's a real, named journalist
-// who chose to show their name on THIS report — never for RSS items, admin
-// uploads, or a journalist who posted that particular report anonymously
-// (even though the underlying authorId is still theirs, linking it would
-// defeat the point of the anonymity toggle).
 function isLinkableByline(news) {
   return news.authorId
     && !NON_PROFILE_AUTHOR_IDS.has(news.authorId)
@@ -36,6 +31,9 @@ export default function NewsDetail() {
   const [imgIndex, setImgIndex] = useState(0)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  // Per-article language toggle — independent of the global app language so
+  // a reader can read this article in English without changing the whole feed.
+  const [articleLang, setArticleLang] = useState(lang)
 
   useEffect(() => {
     getNewsById(id).then(setNews)
@@ -50,11 +48,10 @@ export default function NewsDetail() {
     )
   }
 
-  const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
-  const content = lang === 'en' && news.contentEn ? news.contentEn : news.content
   const isBookmarked = profile?.bookmarks?.includes(id)
   const isLiked = news.likedBy?.includes(user?.uid)
   const isDisliked = news.dislikedBy?.includes(user?.uid)
+  const hasEnglish = !!(news.headlineEn || news.contentEn)
 
   function handleVideoMeta(e) {
     const { videoWidth, videoHeight } = e.target
@@ -86,44 +83,29 @@ export default function NewsDetail() {
     await setReaction(id, user.uid, type, { likedBy: prevLiked, dislikedBy: prevDisliked })
   }
 
-  // The action bar icon is specifically the WhatsApp mark now, so tapping it
-  // should open WhatsApp directly (wa.me works as a plain link on both
-  // mobile and desktop, opening the app or WhatsApp Web) rather than a
-  // generic share sheet that might suggest a different destination than
-  // what the icon promised.
   function handleShare() {
     const shareUrl = window.location.href
-    const text = `${headline}\n${shareUrl}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+    const headline = articleLang === 'en' && news.headlineEn ? news.headlineEn : news.headline
+    window.open(`https://wa.me/?text=${encodeURIComponent(headline + '\n' + shareUrl)}`, '_blank')
   }
 
   const videoIsPortrait = news.videoUrl && isPortraitVideo === true
+  const displayHeadline = articleLang === 'en' && news.headlineEn ? news.headlineEn : news.headline
+  const displayContent = articleLang === 'en' && news.contentEn ? news.contentEn : news.content
 
   return (
     <div className="nf-screen">
       <div style={{ position: 'relative' }}>
         {news.videoUrl ? (
-          <video
-            controls
-            playsInline
-            src={news.videoUrl}
-            poster={news.images?.[0]}
+          <video controls playsInline src={news.videoUrl} poster={news.images?.[0]}
             onLoadedMetadata={handleVideoMeta}
-            style={{
-              width: '100%',
-              aspectRatio: videoIsPortrait ? '9/16' : '4/3',
-              objectFit: videoIsPortrait ? 'contain' : 'cover',
-              background: '#000'
-            }}
-          />
+            style={{ width: '100%', aspectRatio: videoIsPortrait ? '9/16' : '4/3', objectFit: videoIsPortrait ? 'contain' : 'cover', background: '#000' }} />
         ) : news.images?.length ? (
           <>
             <img src={news.images[imgIndex]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover' }} />
             {news.images.length > 1 && (
               <div style={dotsRow}>
-                {news.images.map((_, i) => (
-                  <span key={i} style={{ ...dotStyle, opacity: i === imgIndex ? 1 : 0.4 }} onClick={() => setImgIndex(i)} />
-                ))}
+                {news.images.map((_, i) => <span key={i} style={{ ...dotStyle, opacity: i === imgIndex ? 1 : 0.4 }} onClick={() => setImgIndex(i)} />)}
               </div>
             )}
           </>
@@ -140,9 +122,6 @@ export default function NewsDetail() {
         </div>
       )}
 
-      {/* Single horizontal action bar, directly below the media and above
-          the headline/text — replaces the old split between top-corner
-          icons and a separate row further down the page. */}
       <div style={actionBarStripStyle}>
         <BarButton onClick={() => handleReaction('like')}>
           <ThumbsUpIcon active={isLiked} style={{ color: isLiked ? 'var(--nf-blue)' : 'var(--nf-navy)' }} />
@@ -167,8 +146,18 @@ export default function NewsDetail() {
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
-        <span className="nf-chip active" style={{ marginBottom: 12 }}>{categoryLabel(news.category, lang)}</span>
-        <h1 style={{ fontSize: 22, lineHeight: 1.35, marginBottom: 10 }}>{headline}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span className="nf-chip active">{categoryLabel(news.category, lang)}</span>
+          {hasEnglish && (
+            <div style={langToggleStyle}>
+              <button onClick={() => setArticleLang('te')} style={langToggleBtnStyle(articleLang === 'te')}>తె</button>
+              <button onClick={() => setArticleLang('en')} style={langToggleBtnStyle(articleLang === 'en')}>EN</button>
+            </div>
+          )}
+        </div>
+
+        <h1 style={{ fontSize: 22, lineHeight: 1.35, marginBottom: 10 }}>{displayHeadline}</h1>
+
         <div style={metaStyle}>
           <span>{news.district}</span>
           <span>•</span>
@@ -181,7 +170,9 @@ export default function NewsDetail() {
           <span>{news.views || 0} views</span>
         </div>
 
-        <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap', marginBottom: 30 }}>{content}</p>
+        <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap', marginBottom: 30 }}>
+          {displayContent}
+        </p>
       </div>
 
       {commentsOpen && <CommentsPanel newsId={id} onClose={() => setCommentsOpen(false)} />}
@@ -190,13 +181,8 @@ export default function NewsDetail() {
 }
 
 function BarButton({ onClick, children }) {
-  return (
-    <button onClick={onClick} style={barBtnStyle}>
-      {children}
-    </button>
-  )
+  return <button onClick={onClick} style={barBtnStyle}>{children}</button>
 }
-
 function BarLabel({ children }) {
   return <span style={{ fontSize: 10, color: 'var(--nf-navy)', fontWeight: 700, marginTop: 3 }}>{children}</span>
 }
@@ -209,15 +195,6 @@ const backBtnStyle = {
 }
 const dotsRow = { position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }
 const dotStyle = { width: 6, height: 6, borderRadius: '50%', background: '#fff' }
-const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16 }
-const authorLinkStyle = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  font: 'inherit',
-  color: 'var(--nf-blue)',
-  fontWeight: 700
-}
 const actionBarStripStyle = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -232,3 +209,21 @@ const barBtnStyle = {
   flexDirection: 'column',
   alignItems: 'center'
 }
+const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16, flexWrap: 'wrap' }
+const authorLinkStyle = { border: 'none', background: 'none', padding: 0, font: 'inherit', color: 'var(--nf-blue)', fontWeight: 700 }
+const langToggleStyle = {
+  display: 'flex',
+  border: '1.5px solid var(--nf-line)',
+  borderRadius: 999,
+  overflow: 'hidden',
+  flexShrink: 0
+}
+const langToggleBtnStyle = (active) => ({
+  border: 'none',
+  padding: '5px 12px',
+  fontSize: 12.5,
+  fontWeight: 700,
+  background: active ? 'var(--nf-navy)' : 'transparent',
+  color: active ? '#fff' : 'var(--nf-ink-soft)',
+  transition: 'background .12s ease'
+})

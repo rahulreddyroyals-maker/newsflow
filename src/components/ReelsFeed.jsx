@@ -46,11 +46,12 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
   const [news, setNews] = useState(initialNews)
   const [seen, setSeen] = useState(false)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null)
+  const [slideLang, setSlideLang] = useState(lang)
   const slideRef = useRef(null)
   const videoRef = useRef(null)
-  const headline = lang === 'en' && news.headlineEn ? news.headlineEn : news.headline
-  const summary = lang === 'en' && news.summaryEn ? news.summaryEn : news.summary
-  const content = lang === 'en' && news.contentEn ? news.contentEn : news.content
+  const headline = slideLang === 'en' && news.headlineEn ? news.headlineEn : news.headline
+  const summary = slideLang === 'en' && news.summaryEn ? news.summaryEn : news.summary
+  const content = slideLang === 'en' && news.contentEn ? news.contentEn : news.content
   const isBookmarked = profile?.bookmarks?.includes(news.id)
   const isLiked = news.likedBy?.includes(user?.uid)
   const isDisliked = news.dislikedBy?.includes(user?.uid)
@@ -176,7 +177,21 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             />
           </div>
           <div style={textPaneStyle}>
-            <p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
+            {news.headlineEn && (
+  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+    <div style={{ display: 'flex', border: '1.5px solid var(--nf-line)', borderRadius: 999, overflow: 'hidden' }}>
+      <button onClick={() => setSlideLang('te')}
+        style={{ border: 'none', padding: '5px 12px', fontSize: 12, fontWeight: 700,
+          background: slideLang === 'te' ? 'var(--nf-navy)' : 'transparent',
+          color: slideLang === 'te' ? '#fff' : 'var(--nf-ink-soft)' }}>తె</button>
+      <button onClick={() => setSlideLang('en')}
+        style={{ border: 'none', padding: '5px 12px', fontSize: 12, fontWeight: 700,
+          background: slideLang === 'en' ? 'var(--nf-navy)' : 'transparent',
+          color: slideLang === 'en' ? '#fff' : 'var(--nf-ink-soft)' }}>EN</button>
+    </div>
+  </div>
+)}
+<p style={{ fontSize: 15.5, lineHeight: 1.75, color: 'var(--nf-ink)', whiteSpace: 'pre-wrap' }}>{content || summary}</p>
           </div>
         </>
       )}
