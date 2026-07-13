@@ -5,80 +5,69 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    // .get(key, default) instead of direct dot-access everywhere below —
-    // accounts created before a given field existed (role/suspended/district
-    // were each added at different points) simply don't have it in Firestore
-    // yet. Direct access to a missing map key throws an evaluation error,
-    // and ANY error during rule evaluation is treated as a silent denial —
-    // which is exactly what caused "permission-denied" for journalists whose
-    // accounts predate the `suspended` field, even though nothing was
-    // actually wrong with their account.
     function myRole() { return myProfile().get('role', ''); }
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
-    function isJournalist() { return isSignedIn() && myRole() == 'journalist' && myProfile().get('suspended', false) != true; }
+    function isJournalist() {
+      return isSignedIn()
+        && myRole() == 'journalist'
+        && myProfile().get('suspended', false) != true;
+    }
 
-    // Public, read-only published news feed — EXCEPT likedBy/dislikedBy,
-    // which any signed-in reader can toggle (everything else stays admin-only).
+    // Published news — readers see 'approved' only; 'hidden' is invisible to
+    // readers but still present in the db so admin can republish.
     match /news/{newsId} {
-      allow read: if true;
+      allow read: if resource.data.get('status', 'approved') == 'approved' || isAdmin();
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-                    || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'dislikedBy']));
+                    || (isSignedIn() && request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly(['likedBy', 'dislikedBy']));
 
-      // Comments: anyone signed in can post as themselves; anyone can read;
-      // a comment can be removed by its author or an admin; any signed-in
-      // user can toggle their own like on a comment (likedBy field only).
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
         allow update: if isAdmin()
-                      || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy']));
+                      || (isSignedIn() && request.resource.data.diff(resource.data)
+                            .affectedKeys().hasOnly(['likedBy']));
         allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
       }
     }
 
-    // Categories & districts are static reference data
-    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /districts/{id} { allow read: if true; allow write: if isAdmin(); }
+    // Advertisements — admin-created, readers see 'active' only.
+    match /advertisements/{adId} {
+      allow read: if resource.data.get('status', 'active') == 'active' || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
 
-    // Drafts: journalists create + read their own (blocked entirely while
-    // suspended, via isJournalist() above); admins read/manage all.
-    // A journalist can only submit for their OWN registered district —
-    // matches the app-side restriction (no district picker shown to them).
+    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /districts/{id}   { allow read: if true; allow write: if isAdmin(); }
+
     match /drafts/{draftId} {
       allow create: if isJournalist()
                     && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.district == myProfile().get('district', '');
       allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
-      allow update: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid && resource.data.status == 'pending');
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && resource.data.authorId == request.auth.uid
+                        && resource.data.status == 'pending');
       allow delete: if isAdmin();
     }
 
-    // Users: anyone signed in can read public profile fields via app logic;
-    // a user can write their own document EXCEPT the admin-controlled fields
-    // (role, verified, suspended, and the two wallet/earnings fields, which
-    // only get changed by approveDraft/admin actions, never by the user
-    // directly) — those require admin, even for your own doc.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isOwner(uid);
       allow update: if isAdmin()
                     || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks', 'displayNamePublicly', 'photoUrl']));
+                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks',
+                                    'displayNamePublicly', 'photoUrl', 'fcmToken']));
     }
 
-    // Ad leads: a journalist submits leads they've sourced; only admins can
-    // update status/deal amount/commission. A journalist can see only their
-    // own submitted leads; admins see and manage everything.
     match /adLeads/{leadId} {
       allow create: if isJournalist() && request.resource.data.submittedBy == request.auth.uid;
       allow read: if isAdmin() || (isSignedIn() && resource.data.submittedBy == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
-    // Withdrawal requests: a journalist files their own request once they've
-    // hit the payout threshold (enforced app-side before allowing the
-    // button); only admins mark it paid/rejected.
     match /withdrawalRequests/{requestId} {
       allow create: if isJournalist() && request.resource.data.journalistId == request.auth.uid;
       allow read: if isAdmin() || (isSignedIn() && resource.data.journalistId == request.auth.uid);

@@ -1,4 +1,6 @@
 // src/contexts/AuthContext.jsx
+// Saves extended journalist fields (fullName, village, mandal, constituency,
+// political affiliation) alongside the base profile on registration.
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   createUserWithEmailAndPassword,
@@ -19,17 +21,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let unsubProfile = null
-
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
       unsubProfile?.()
-
       if (firebaseUser) {
-        // Live listener instead of a one-time fetch — anything an admin
-        // changes server-side while this session is open (wallet points
-        // credited on approval, verified/suspended status, district
-        // corrections, etc.) now reflects immediately instead of requiring
-        // the user to manually refresh or log out and back in.
         unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
           setProfile(snap.exists() ? { uid: firebaseUser.uid, ...snap.data() } : null)
           setLoading(false)
@@ -40,28 +35,37 @@ export function AuthProvider({ children }) {
         setLoading(false)
       }
     })
-
-    return () => {
-      unsubAuth()
-      unsubProfile?.()
-    }
+    return () => { unsubAuth(); unsubProfile?.() }
   }, [])
 
-  async function register({ name, email, phone, password, role, language, district }) {
+  async function register({
+    name, email, phone, password, role, language, district,
+    // journalist-only extended fields:
+    fullName, village, mandal, constituency, politicalAffiliation, politicalPartyName
+  }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     const newProfile = {
       name,
       email,
       phone,
-      role, // 'reader' | 'journalist'
-      language, // 'te' | 'en'
+      role,
+      language,
       district,
-      verified: role === 'journalist' ? false : true,
+      verified: false,
       bookmarks: [],
-      createdAt: serverTimestamp()
+      walletPoints: 0,
+      adCommissionEarnings: 0,
+      createdAt: serverTimestamp(),
+      ...(role === 'journalist' && {
+        fullName: fullName || name,
+        village: village || '',
+        mandal: mandal || '',
+        constituency: constituency || '',
+        politicalAffiliation: politicalAffiliation || 'No',
+        politicalPartyName: politicalAffiliation === 'Yes' ? (politicalPartyName || '') : ''
+      })
     }
     await setDoc(doc(db, 'users', cred.user.uid), newProfile)
-    setProfile({ uid: cred.user.uid, ...newProfile })
     return cred.user
   }
 
@@ -74,32 +78,19 @@ export function AuthProvider({ children }) {
     setGuestMode(false)
   }
 
-  function continueAsGuest() {
-    setGuestMode(true)
-  }
+  function continueAsGuest() { setGuestMode(true) }
+  function refreshProfile() {} // no-op — live listener keeps profile in sync
 
-  // Kept for compatibility with existing call sites — now a no-op in
-  // practice since the live onSnapshot listener above already keeps
-  // `profile` in sync automatically. Safe to leave both in place.
-  function refreshProfile() {}
-
-  const value = {
-    user,
-    profile,
-    loading,
-    guestMode,
-    isJournalist: profile?.role === 'journalist',
-    isAdmin: profile?.role === 'admin',
-    register,
-    login,
-    logout,
-    continueAsGuest,
-    refreshProfile
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{
+      user, profile, loading, guestMode,
+      isJournalist: profile?.role === 'journalist',
+      isAdmin: profile?.role === 'admin',
+      register, login, logout, continueAsGuest, refreshProfile
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
-export function useAuth() {
-  return useContext(AuthContext)
-}
+export function useAuth() { return useContext(AuthContext) }

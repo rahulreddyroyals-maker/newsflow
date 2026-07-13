@@ -1,5 +1,6 @@
 // src/utils/categories.js
 export const CATEGORIES = [
+  { id: 'general', te: 'జనరల్', en: 'General' },
   { id: 'state-politics', te: 'రాజకీయాలు', en: 'State Politics' },
   { id: 'district-news', te: 'జిల్లా వార్తలు', en: 'District News' },
   { id: 'education', te: 'విద్య', en: 'Education' },
@@ -9,7 +10,10 @@ export const CATEGORIES = [
   { id: 'technology', te: 'టెక్నాలజీ', en: 'Technology' },
   { id: 'health', te: 'ఆరోగ్యం', en: 'Health' },
   { id: 'sports', te: 'క్రీడలు', en: 'Sports' },
-  { id: 'cinema', te: 'సినిమా', en: 'Cinema' }
+  { id: 'cinema', te: 'సినిమా', en: 'Cinema' },
+  { id: 'transport', te: 'రవాణా', en: 'Transport' },
+  { id: 'crime', te: 'నేరాలు', en: 'Crime' },
+  { id: 'weather', te: 'వాతావరణం', en: 'Weather' }
 ]
 
 export const categoryLabel = (id, lang = 'en') => {

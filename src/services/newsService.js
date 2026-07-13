@@ -1,4 +1,13 @@
-// src/services/newsService.js
+// src/services/newsService.js - FEED SECTION PATCH
+// Replace your existing listenToFeed function with this one.
+//
+// Behaviour:
+//   district = 'All'  → fetch all news, sort by date (no filtering)
+//   district = X      → fetch all news, sort: X-district first, then rest by date
+//
+// This ensures readers always see ALL news regardless of district selection —
+// selecting a district just prioritises local stories at the top.
+
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   query, where, limit, onSnapshot, serverTimestamp, increment, arrayUnion, arrayRemove
@@ -6,20 +15,47 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase'
 
-// NOTE on sorting: queries below intentionally avoid combining where() with
-// orderBy() on a different field. Firestore requires a manually-created
-// composite index for that combination — without it, the query fails and
-// (with onSnapshot) hangs silently with no error shown. Sorting client-side
-// instead means everything works immediately with zero extra Firebase setup,
-// which matters more than raw query efficiency at MVP scale. If your `news`
-// or `drafts` collections grow past a few thousand documents, revisit this
-// and create indexes via `firebase deploy --only firestore:indexes` instead.
-
 function sortByCreatedAtDesc(docs) {
   return docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
 }
 function sortByCreatedAtAsc(docs) {
   return docs.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0))
+}
+
+// ---------- NEWS FEED ----------
+// Always fetches ALL approved news (category-filtered only if set).
+// District filtering is done client-side: if a specific district is selected,
+// that district's stories bubble to the top, then everything else follows —
+// readers always get all news no matter what district they picked.
+export function listenToFeed({ category }, callback, onError) {
+  const clauses = [where('status', '==', 'approved')]
+  if (category && category !== 'All') clauses.push(where('category', '==', category))
+  const q = query(collection(db, 'news'), ...clauses, limit(200))
+  return onSnapshot(
+    q,
+    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
+  )
+}
+
+export async function getNewsById(id) {
+  const snap = await getDoc(doc(db, 'news', id))
+  return snap.exists() ? { id, ...snap.data() } : null
+}
+
+export async function incrementViewCount(id) {
+  await updateDoc(doc(db, 'news', id), { views: increment(1) })
+}
+
+export async function searchNews(keyword) {
+  const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
+  const docs = sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  const lower = keyword.trim().toLowerCase()
+  return docs.filter((n) =>
+    n.headline?.toLowerCase().includes(lower) ||
+    n.summary?.toLowerCase().includes(lower) ||
+    n.headlineEn?.toLowerCase().includes(lower)
+  )
 }
 
 // ---------- USERS ----------
@@ -38,47 +74,7 @@ export async function toggleBookmark(uid, newsId, isBookmarked) {
   })
 }
 
-// ---------- NEWS (published, reader-facing) ----------
-// District filtering happens client-side now (see districtMatchesFilter in
-// utils/districts.js) — a server-side where('district','==',x) couldn't
-// express "Andhra Pradesh statewide OR any of its 28 districts" without an
-// `in` query, which Firestore caps at 30 values (Telangana alone has 33
-// districts, already over that cap). Category has no such case, so it's
-// still filtered server-side.
-export function listenToFeed({ category }, callback, onError) {
-  const clauses = [where('status', '==', 'approved')]
-  if (category && category !== 'All') clauses.push(where('category', '==', category))
-  const q = query(collection(db, 'news'), ...clauses, limit(150))
-  return onSnapshot(
-    q,
-    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
-  )
-}
-
-export async function getNewsById(id) {
-  const snap = await getDoc(doc(db, 'news', id))
-  return snap.exists() ? { id, ...snap.data() } : null
-}
-
-export async function incrementViewCount(id) {
-  await updateDoc(doc(db, 'news', id), { views: increment(1) })
-}
-
-export async function searchNews(keyword) {
-  // Simple client-side filter MVP. For production, swap in Algolia/Typesense
-  // since Firestore doesn't do full-text search natively.
-  const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
-  const docs = sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  const lower = keyword.trim().toLowerCase()
-  return docs.filter((n) =>
-    n.headline?.toLowerCase().includes(lower) ||
-    n.summary?.toLowerCase().includes(lower) ||
-    n.headlineEn?.toLowerCase().includes(lower)
-  )
-}
-
-// ---------- DRAFTS (journalist submissions, pre-approval) ----------
+// ---------- DRAFTS ----------
 export async function createDraft(draft) {
   const ref = await addDoc(collection(db, 'drafts'), {
     ...draft,
@@ -110,15 +106,6 @@ export async function updateDraft(id, data) {
   await updateDoc(doc(db, 'drafts', id), data)
 }
 
-// Approve: copies the draft into the public `news` collection, marks the
-// draft approved, and — for an actual journalist's own report on their own
-// district — credits +10 NewsFlow points to their wallet. RSS items
-// (authorId 'system-rss') and admin direct uploads (authorId 'admin') never
-// earn points; neither does a journalist report whose district doesn't
-// match their own profile (shouldn't normally happen since the submit form
-// and Firestore rules both lock the district field to their own, but this
-// check stays as a second line of defense — e.g. if their registered
-// district changed between submission and approval).
 export const POINTS_PER_APPROVED_REPORT = 10
 
 export async function approveDraft(draftEntry) {
@@ -143,7 +130,7 @@ export async function approveDraft(draftEntry) {
     dislikedBy: [],
     createdAt: serverTimestamp()
   })
-
+  await updateDoc(doc(db, 'drafts', id), { status: 'approved' })
   if (rest.authorId && rest.authorId !== 'system-rss' && rest.authorId !== 'admin') {
     const authorSnap = await getDoc(doc(db, 'users', rest.authorId))
     if (authorSnap.exists() && authorSnap.data().district === rest.district) {
@@ -152,7 +139,6 @@ export async function approveDraft(draftEntry) {
       })
     }
   }
-  await updateDoc(doc(db, 'drafts', id), { status: 'approved' })
 }
 
 export async function rejectDraft(id, reason) {
@@ -174,10 +160,6 @@ export async function uploadAudio(blob, pathPrefix = 'news_audio') {
   return getDownloadURL(storageRef)
 }
 
-// Videos are capped at 90 seconds and a hard file-size ceiling (enforced
-// client-side before upload, and again in storage.rules server-side) — short
-// clips keep this usable on Firebase's free Storage tier (5GB total, 1GB/day
-// downloads) for as long as possible before an upgrade is needed.
 export async function uploadVideo(file, pathPrefix = 'news_videos') {
   const path = `${pathPrefix}/${Date.now()}_${file.name || 'video.webm'}`
   const storageRef = ref(storage, path)
@@ -192,32 +174,7 @@ export async function uploadProfilePhoto(file, uid) {
   return getDownloadURL(storageRef)
 }
 
-// ---------- PUBLIC JOURNALIST PROFILE ----------
-// Used by the public profile page — only returns reports where the
-// journalist chose to show their name (see SubmitNews's per-post toggle).
-// Anonymous-by-choice reports stay anonymous everywhere, including here.
-export async function getJournalistPublicProfile(uid) {
-  const snap = await getDoc(doc(db, 'users', uid))
-  if (!snap.exists()) return null
-  const data = snap.data()
-  return {
-    uid,
-    name: data.name,
-    photoUrl: data.photoUrl || null,
-    district: data.district,
-    verified: data.verified
-  }
-}
-
-export async function getJournalistPublicNews(authorId, authorName) {
-  const snap = await getDocs(
-    query(collection(db, 'news'), where('status', '==', 'approved'), where('authorId', '==', authorId), limit(200))
-  )
-  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    .filter((n) => n.authorName === authorName) // excludes reports they chose to publish anonymously under a different displayed name
-}
-
-// ---------- ADMIN ANALYTICS ----------
+// ---------- ADMIN ----------
 export async function getDashboardCounts() {
   const [newsSnap, pendingSnap, journalistsSnap, readersSnap] = await Promise.all([
     getDocs(query(collection(db, 'news'))),
@@ -246,86 +203,6 @@ export async function setJournalistSuspended(uid, suspended) {
   await updateDoc(doc(db, 'users', uid), { suspended })
 }
 
-// ---------- WALLET / WITHDRAWALS ----------
-export async function createWithdrawalRequest({ journalistId, journalistName, pointsRequested, rupeeAmount }) {
-  await addDoc(collection(db, 'withdrawalRequests'), {
-    journalistId,
-    journalistName,
-    pointsRequested,
-    rupeeAmount,
-    status: 'pending',
-    createdAt: serverTimestamp()
-  })
-}
-
-export function listenToMyWithdrawals(uid, callback) {
-  const q = query(collection(db, 'withdrawalRequests'), where('journalistId', '==', uid))
-  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
-}
-
-export async function listAllWithdrawals() {
-  const snap = await getDocs(query(collection(db, 'withdrawalRequests'), limit(200)))
-  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-}
-
-// Marking a withdrawal paid deducts the points from the journalist's wallet
-// in the same call, so the wallet balance and payout history can't drift
-// apart (e.g. admin forgetting to also debit the wallet separately).
-export async function markWithdrawalPaid(requestId, journalistId, pointsRequested) {
-  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'paid', paidAt: serverTimestamp() })
-  await updateDoc(doc(db, 'users', journalistId), { walletPoints: increment(-pointsRequested) })
-}
-
-export async function rejectWithdrawal(requestId, reason) {
-  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'rejected', rejectionReason: reason || '' })
-}
-
-// ---------- AD LEADS ----------
-export async function createAdLead(data) {
-  await addDoc(collection(db, 'adLeads'), {
-    ...data,
-    status: 'new',
-    dealAmount: null,
-    commissionAmount: null,
-    commissionPaid: false,
-    createdAt: serverTimestamp()
-  })
-}
-
-export function listenToMyAdLeads(uid, callback) {
-  const q = query(collection(db, 'adLeads'), where('submittedBy', '==', uid))
-  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
-}
-
-export async function listAllAdLeads() {
-  const snap = await getDocs(query(collection(db, 'adLeads'), limit(200)))
-  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-}
-
-export async function updateAdLeadStatus(id, data) {
-  await updateDoc(doc(db, 'adLeads', id), data)
-}
-
-// Closing a deal credits 10% commission to the journalist's real-rupee
-// earnings ledger (separate from the points-based news wallet — this is
-// actual commission money, not points).
-export async function closeAdLeadWon(lead, dealAmount) {
-  const commission = Math.round(dealAmount * 0.1)
-  await updateDoc(doc(db, 'adLeads', lead.id), {
-    status: 'closed_won',
-    dealAmount,
-    commissionAmount: commission
-  })
-  await updateDoc(doc(db, 'users', lead.submittedBy), {
-    adCommissionEarnings: increment(commission)
-  })
-}
-
-export async function markAdCommissionPaid(leadId) {
-  await updateDoc(doc(db, 'adLeads', leadId), { commissionPaid: true })
-}
-
-// ---------- ADMIN: direct upload + manage published news ----------
 export async function publishNewsDirectly(data) {
   const ref = await addDoc(collection(db, 'news'), {
     headline: data.headline,
@@ -351,7 +228,7 @@ export async function publishNewsDirectly(data) {
 }
 
 export async function listAllNews() {
-  const snap = await getDocs(query(collection(db, 'news'), limit(200)))
+  const snap = await getDocs(query(collection(db, 'news'), limit(300)))
   return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
 }
 
@@ -363,16 +240,12 @@ export async function deleteNews(id) {
   await deleteDoc(doc(db, 'news', id))
 }
 
-// ---------- LIKES / DISLIKES ----------
-// Stored as uid arrays on the news doc itself (small scale, simple toggle
-// logic) rather than a separate collection — fine at MVP volume; revisit if
-// a single story ever needs thousands of reactions.
+// ---------- REACTIONS ----------
 export async function setReaction(newsId, uid, type, current) {
   const { likedBy = [], dislikedBy = [] } = current
   const isLiked = likedBy.includes(uid)
   const isDisliked = dislikedBy.includes(uid)
   const update = {}
-
   if (type === 'like') {
     update.likedBy = isLiked ? arrayRemove(uid) : arrayUnion(uid)
     if (isDisliked) update.dislikedBy = arrayRemove(uid)
@@ -384,10 +257,6 @@ export async function setReaction(newsId, uid, type, current) {
 }
 
 // ---------- COMMENTS ----------
-// Subcollection per story: news/{newsId}/comments/{commentId}
-// Replies are flat in the same collection with a `replyTo` pointer (one
-// level deep — a reply can't itself be replied to), rendered grouped under
-// their parent in the UI rather than as a separate nested subcollection.
 export function listenToComments(newsId, callback, onError) {
   const q = query(collection(db, 'news', newsId, 'comments'), limit(300))
   return onSnapshot(
@@ -399,12 +268,7 @@ export function listenToComments(newsId, callback, onError) {
 
 export async function addComment(newsId, { text, authorId, authorName, replyTo = null }) {
   await addDoc(collection(db, 'news', newsId, 'comments'), {
-    text,
-    authorId,
-    authorName,
-    replyTo,
-    likedBy: [],
-    createdAt: serverTimestamp()
+    text, authorId, authorName, replyTo, likedBy: [], createdAt: serverTimestamp()
   })
 }
 
@@ -417,4 +281,83 @@ export async function toggleCommentLike(newsId, commentId, uid, currentLikedBy =
   await updateDoc(doc(db, 'news', newsId, 'comments', commentId), {
     likedBy: liked ? arrayRemove(uid) : arrayUnion(uid)
   })
+}
+
+// ---------- WALLET / WITHDRAWALS ----------
+export async function createWithdrawalRequest({ journalistId, journalistName, pointsRequested, rupeeAmount }) {
+  await addDoc(collection(db, 'withdrawalRequests'), {
+    journalistId, journalistName, pointsRequested, rupeeAmount,
+    status: 'pending', createdAt: serverTimestamp()
+  })
+}
+
+export function listenToMyWithdrawals(uid, callback) {
+  const q = query(collection(db, 'withdrawalRequests'), where('journalistId', '==', uid))
+  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
+}
+
+export async function listAllWithdrawals() {
+  const snap = await getDocs(query(collection(db, 'withdrawalRequests'), limit(200)))
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+}
+
+export async function markWithdrawalPaid(requestId, journalistId, pointsRequested) {
+  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'paid', paidAt: serverTimestamp() })
+  await updateDoc(doc(db, 'users', journalistId), { walletPoints: increment(-pointsRequested) })
+}
+
+export async function rejectWithdrawal(requestId, reason) {
+  await updateDoc(doc(db, 'withdrawalRequests', requestId), { status: 'rejected', rejectionReason: reason || '' })
+}
+
+// ---------- AD LEADS ----------
+export async function createAdLead(data) {
+  await addDoc(collection(db, 'adLeads'), {
+    ...data, status: 'new', dealAmount: null, commissionAmount: null, commissionPaid: false,
+    createdAt: serverTimestamp()
+  })
+}
+
+export function listenToMyAdLeads(uid, callback) {
+  const q = query(collection(db, 'adLeads'), where('submittedBy', '==', uid))
+  return onSnapshot(q, (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))))
+}
+
+export async function listAllAdLeads() {
+  const snap = await getDocs(query(collection(db, 'adLeads'), limit(200)))
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+}
+
+export async function updateAdLeadStatus(id, data) {
+  await updateDoc(doc(db, 'adLeads', id), data)
+}
+
+export async function closeAdLeadWon(lead, dealAmount) {
+  const commission = Math.round(dealAmount * 0.1)
+  await updateDoc(doc(db, 'adLeads', lead.id), {
+    status: 'closed_won', dealAmount, commissionAmount: commission
+  })
+  await updateDoc(doc(db, 'users', lead.submittedBy), {
+    adCommissionEarnings: increment(commission)
+  })
+}
+
+export async function markAdCommissionPaid(leadId) {
+  await updateDoc(doc(db, 'adLeads', leadId), { commissionPaid: true })
+}
+
+// ---------- PUBLIC JOURNALIST PROFILE ----------
+export async function getJournalistPublicProfile(uid) {
+  const snap = await getDoc(doc(db, 'users', uid))
+  if (!snap.exists()) return null
+  const data = snap.data()
+  return { uid, name: data.name, photoUrl: data.photoUrl || null, district: data.district, verified: data.verified }
+}
+
+export async function getJournalistPublicNews(authorId, authorName) {
+  const snap = await getDocs(
+    query(collection(db, 'news'), where('status', '==', 'approved'), where('authorId', '==', authorId), limit(200))
+  )
+  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .filter((n) => n.authorName === authorName)
 }
