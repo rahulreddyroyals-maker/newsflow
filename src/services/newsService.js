@@ -28,13 +28,31 @@ function sortByCreatedAtAsc(docs) {
 // that district's stories bubble to the top, then everything else follows —
 // readers always get all news no matter what district they picked.
 export function listenToFeed({ category }, callback, onError) {
+  // Import these at the top of your newsService.js if not already there:
+  // import { collection, query, where, limit, onSnapshot } from 'firebase/firestore'
+  
   const clauses = [where('status', '==', 'approved')]
-  if (category && category !== 'All') clauses.push(where('category', '==', category))
+  
+  // Category filter only — never filter by district server-side
+  if (category && category !== 'All') {
+    clauses.push(where('category', '==', category))
+  }
+  
   const q = query(collection(db, 'news'), ...clauses, limit(200))
+  
   return onSnapshot(
     q,
-    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
+    (snap) => {
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      // Sort newest first
+      all.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+      callback(all)
+    },
+    (err) => {
+      console.error('listenToFeed failed:', err)
+      onError?.(err)
+      callback([])
+    }
   )
 }
 
