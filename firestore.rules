@@ -2,9 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Safe helpers — use .get(key, default) everywhere so missing fields
+    // on older user docs don't throw and silently deny everything.
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
     function myRole() { return myProfile().get('role', ''); }
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
     function isJournalist() {
@@ -13,8 +17,7 @@ service cloud.firestore {
         && myProfile().get('suspended', false) != true;
     }
 
-    // Published news — readers see 'approved' only; 'hidden' is invisible to
-    // readers but still present in the db so admin can republish.
+    // ── News ─────────────────────────────────────────────────────────────────
     match /news/{newsId} {
       allow read: if resource.data.get('status', 'approved') == 'approved' || isAdmin();
       allow create, delete: if isAdmin();
@@ -28,24 +31,32 @@ service cloud.firestore {
         allow update: if isAdmin()
                       || (isSignedIn() && request.resource.data.diff(resource.data)
                             .affectedKeys().hasOnly(['likedBy']));
-        allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+        allow delete: if isAdmin()
+                      || (isSignedIn() && resource.data.authorId == request.auth.uid);
       }
     }
 
-    // Advertisements — admin-created, readers see 'active' only.
+    // ── Advertisements ────────────────────────────────────────────────────────
+    // THIS COLLECTION WAS MISSING FROM THE LIVE RULES — that's what caused
+    // "Missing or insufficient permissions" when publishing an ad.
     match /advertisements/{adId} {
       allow read: if resource.data.get('status', 'active') == 'active' || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
+    // ── Categories / Districts (static reference) ─────────────────────────────
     match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
     match /districts/{id}   { allow read: if true; allow write: if isAdmin(); }
 
+    // ── Drafts ────────────────────────────────────────────────────────────────
     match /drafts/{draftId} {
       allow create: if isJournalist()
                     && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.district == myProfile().get('district', '');
-      allow read: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.authorId == request.auth.uid);
       allow update: if isAdmin()
                     || (isSignedIn()
                         && resource.data.authorId == request.auth.uid
@@ -53,27 +64,37 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Users ─────────────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isOwner(uid);
       allow update: if isAdmin()
-                    || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['name', 'phone', 'language', 'district', 'bookmarks',
-                                    'displayNamePublicly', 'photoUrl', 'fcmToken']));
+                    || (isOwner(uid) && request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly([
+                            'name', 'phone', 'language', 'district',
+                            'bookmarks', 'displayNamePublicly', 'photoUrl', 'fcmToken'
+                          ]));
     }
 
+    // ── Ad leads ──────────────────────────────────────────────────────────────
     match /adLeads/{leadId} {
-      allow create: if isJournalist() && request.resource.data.submittedBy == request.auth.uid;
-      allow read: if isAdmin() || (isSignedIn() && resource.data.submittedBy == request.auth.uid);
+      allow create: if isJournalist()
+                    && request.resource.data.submittedBy == request.auth.uid;
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.submittedBy == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
+    // ── Withdrawal requests ───────────────────────────────────────────────────
     match /withdrawalRequests/{requestId} {
-      allow create: if isJournalist() && request.resource.data.journalistId == request.auth.uid;
-      allow read: if isAdmin() || (isSignedIn() && resource.data.journalistId == request.auth.uid);
+      allow create: if isJournalist()
+                    && request.resource.data.journalistId == request.auth.uid;
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.journalistId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
+    // ── Notifications ─────────────────────────────────────────────────────────
     match /notifications/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
