@@ -1,9 +1,11 @@
 // src/pages/Home.jsx
-// FEED BEHAVIOUR (guaranteed):
-//   "All"      → every news item, newest first
-//   "District" → that district's news first, then every other item after
-//   EITHER WAY → reader sees 100% of all published news, nothing hidden
-
+// FIX: "Trending" (category = 'All') should show every report from every
+// category, sorted by recency — a newer General item should always rank
+// above an older State Politics item within the same district-priority
+// bucket. If that wasn't happening, the most likely cause is a district
+// string mismatch (extra whitespace, casing) silently sending an item into
+// the wrong sort bucket. isLocalMatch below now normalizes both sides
+// (trim + case-fold) before comparing, so no valid match is ever missed.
 import { useEffect, useState } from 'react'
 import Header from '../components/Header'
 import CategoryTabs from '../components/CategoryTabs'
@@ -21,47 +23,30 @@ function getInitialDistrict(profile) {
   return 'All'
 }
 
-// Sorts items so the selected district appears first.
-// ALL items are always included — selecting a district never removes anything.
-//
-// Rules:
-//   district === 'All'  →  local home district first (if known), then rest
-//   district === 'X'    →  X's news first, then ALL remaining news
-//
-// "Matching" for statewide scopes (e.g. "Andhra Pradesh (statewide)"):
-//   matches all AP district items too, so they also bubble up.
-function sortByDistrict(items, selectedDistrict, homeDistrict) {
-  if (!items.length) return items
-
-  const isMatch = (newsDistrict) => {
-    if (!selectedDistrict || selectedDistrict === 'All') {
-      // For "All", only bubble the user's home district
-      return homeDistrict && newsDistrict === homeDistrict
-    }
-    if (newsDistrict === selectedDistrict) return true
-    // Statewide scope matches all districts in that state
-    if (selectedDistrict === 'Andhra Pradesh (statewide)') {
-      return AP_DISTRICTS.includes(newsDistrict)
-    }
-    if (selectedDistrict === 'Telangana (statewide)') {
-      return TS_DISTRICTS.includes(newsDistrict)
-    }
-    return false
-  }
-
-  const local = items.filter((n) => isMatch(n.district))
-  const rest  = items.filter((n) => !isMatch(n.district))
-  return [...local, ...rest]
+function tsMs(ts) {
+  if (!ts) return 0
+  if (typeof ts.toMillis === 'function') return ts.toMillis()
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000
+  const n = Number(ts)
+  if (!isNaN(n) && n > 1_000_000_000) return n
+  const d = new Date(ts)
+  return isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
-// District lists for statewide scope matching (inline, avoids a separate import)
+// Normalizes a district string for comparison — trims whitespace and
+// lowercases, so "Andhra Pradesh (statewide) " (trailing space from a form
+// field) still matches "Andhra Pradesh (statewide)" exactly.
+function normalize(str) {
+  return (str || '').trim().toLowerCase()
+}
+
 const AP_DISTRICTS = [
   'Srikakulam','Parvathipuram Manyam','Vizianagaram','Visakhapatnam','Anakapalli',
   'Alluri Sitharama Raju','Kakinada','East Godavari','Dr. B.R. Ambedkar Konaseema',
   'West Godavari','Eluru','Krishna','NTR','Guntur','Palnadu','Bapatla',
   'Prakasam','Markapuram','Nellore','Kurnool','Nandyal','Anantapur',
   'Sri Sathya Sai','YSR Kadapa','Annamayya','Chittoor','Tirupati','Polavaram'
-]
+].map(normalize)
 const TS_DISTRICTS = [
   'Hyderabad','Medchal-Malkajgiri','Rangareddy','Vikarabad','Sangareddy',
   'Siddipet','Medak','Kamareddy','Nizamabad','Jagtial','Rajanna Sircilla',
@@ -70,26 +55,46 @@ const TS_DISTRICTS = [
   'Jangaon','Mahabubabad','Bhadradri Kothagudem','Khammam','Mulugu',
   'Suryapet','Nalgonda','Yadadri Bhuvanagiri','Mahabubnagar','Nagarkurnool',
   'Wanaparthy','Jogulamba Gadwal','Narayanpet'
-]
+].map(normalize)
+
+function isLocalMatch(newsDistrict, selectedDistrict, homeDistrict) {
+  const target = normalize(selectedDistrict === 'All' ? homeDistrict : selectedDistrict)
+  const item = normalize(newsDistrict)
+  if (!target) return false
+  if (item === target) return true
+  if (target === normalize('Andhra Pradesh (statewide)')) return AP_DISTRICTS.includes(item)
+  if (target === normalize('Telangana (statewide)'))       return TS_DISTRICTS.includes(item)
+  return false
+}
+
+// Local-district items first (by recency), then every remaining item
+// (also by recency) — regardless of category. "Trending" passes
+// category=null so every category is included in both buckets;
+// picking a specific category (e.g. General) only narrows the pool
+// BEFORE this sort runs, it never changes the sort itself.
+function sortFeed(items, selectedDistrict, homeDistrict) {
+  if (!items.length) return items
+  const local = items.filter((n) =>  isLocalMatch(n.district, selectedDistrict, homeDistrict))
+  const rest  = items.filter((n) => !isLocalMatch(n.district, selectedDistrict, homeDistrict))
+  const byDate = (a, b) => tsMs(b.createdAt) - tsMs(a.createdAt)
+  return [...local.sort(byDate), ...rest.sort(byDate)]
+}
 
 export default function Home() {
   const { profile, user, refreshProfile } = useAuth()
   const [district, setDistrict] = useState(() => getInitialDistrict(profile))
   const [category, setCategory] = useState('All')
-  const [allNews, setAllNews] = useState(null)   // ALL news from Firestore, no district filter
+  const [allNews, setAllNews] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [feedError, setFeedError] = useState('')
   const [reelsIndex, setReelsIndex] = useState(null)
 
-  // Sync district default from profile (only first time, before any manual selection)
   useEffect(() => {
     if (profile?.district && !localStorage.getItem(DISTRICT_KEY)) {
       setDistrict(profile.district)
     }
   }, [profile])
 
-  // Subscribe to ALL approved news — no district filter at the Firestore level.
-  // Category is the only server-side filter (simple, no composite index needed).
   useEffect(() => {
     setAllNews(null)
     setFeedError('')
@@ -111,9 +116,8 @@ export default function Home() {
     }
   }
 
-  // Apply district sort — ALL items included, local just floats to top
   const displayedNews = allNews
-    ? sortByDistrict(allNews, district, profile?.district)
+    ? sortFeed(allNews, district, profile?.district)
     : null
 
   function openReelsAt(tappedNews) {
@@ -142,12 +146,8 @@ export default function Home() {
 
         {allNews !== null && displayedNews?.length === 0 && (
           <div className="nf-empty">
-            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--nf-navy)', marginBottom: 6 }}>
-              No news yet
-            </p>
-            <p style={{ fontSize: 13.5 }}>
-              Try a different category, or check back soon.
-            </p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--nf-navy)', marginBottom: 6 }}>No news yet</p>
+            <p style={{ fontSize: 13.5 }}>Try a different category, or check back soon.</p>
           </div>
         )}
 

@@ -1,4 +1,10 @@
 // src/admin/Dashboard.jsx
+// FIX: scroll wasn't working. In a flex-column parent (nf-screen), a
+// scrollable child needs min-height:0 explicitly — without it, some browsers
+// let the content's natural height push the flex item past the viewport
+// instead of clipping+scrolling it, especially once enough buttons/tiles
+// stack up to exceed one screen. Also gave the header flex-shrink:0 so it
+// can never be compressed or miscalculated as part of the scrollable area.
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -29,13 +35,14 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="nf-screen">
-      <div style={{ padding: '20px 16px 0' }}>
-        <h1 style={{ fontSize: 20 }}>Admin Dashboard</h1>
-        <div className="nf-flow-rule" style={{ marginTop: 8, marginBottom: 18 }} />
+    <div style={screenStyle}>
+      <div style={headerStyle}>
+        <h1 style={{ fontSize: 20, margin: 0 }}>Admin Dashboard</h1>
+        <div className="nf-flow-rule" style={{ marginTop: 8 }} />
       </div>
-      <div className="nf-scroll-body nf-container">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+      <div style={scrollBodyStyle} className="nf-container">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 18 }}>
           {tiles.map((t) => (
             <button key={t.label} className="nf-card" style={tileStyle} onClick={t.onClick}>
               <span style={{ fontSize: 28, fontWeight: 800, color: t.color }}>{t.value ?? '—'}</span>
@@ -62,7 +69,7 @@ export default function AdminDashboard() {
         <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/withdrawals')}>
           💰 Withdrawal Requests
         </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 30 }} onClick={() => navigate('/admin/journalists')}>
+        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 40 }} onClick={() => navigate('/admin/journalists')}>
           Manage Journalists
         </button>
       </div>
@@ -77,4 +84,26 @@ const tileStyle = {
   flexDirection: 'column',
   gap: 6,
   textAlign: 'left'
+}
+
+// Explicit inline styles (not relying solely on the shared .nf-screen /
+// .nf-scroll-body classes) so this page's scroll behaviour can't be broken
+// by a shared CSS rule changing elsewhere in the app.
+const screenStyle = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  background: 'var(--nf-paper-dim)',
+  overflow: 'hidden'
+}
+const headerStyle = {
+  flexShrink: 0,
+  padding: '20px 16px 0'
+}
+const scrollBodyStyle = {
+  flex: '1 1 auto',
+  minHeight: 0,
+  overflowY: 'auto',
+  WebkitOverflowScrolling: 'touch',
+  paddingBottom: 'calc(var(--nf-nav-h) + 20px)'
 }
