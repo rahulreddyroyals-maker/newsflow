@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.web.newsflowshots.twa",
+        "sha256_cert_fingerprints": ["C8:88:4C:E9:2D:F2:64:EF:DE:E5:7C:4F:66:0C:B4:3C:67:A4:E2:0F:74:EC:21:7F:CD:90:6A:9E:8A:11:4D:B4"]
+      }
+    }]

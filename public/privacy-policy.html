@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — NewsFlow</title>
+<style>
+  :root {
+    --navy: #0F1F3D;
+    --orange: #FF5B1F;
+    --ink: #161B26;
+    --ink-soft: #5B6473;
+    --line: #E6E9F2;
+    --paper-dim: #F4F6FB;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--paper-dim);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  header img { width: 36px; height: 36px; border-radius: 50%; }
+  header h1 { font-size: 20px; margin: 0; color: var(--navy); }
+  header h1 span { color: var(--orange); }
+  .updated { color: var(--ink-soft); font-size: 13px; margin-bottom: 32px; }
+  h2 {
+    font-size: 17px;
+    color: var(--navy);
+    margin-top: 34px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { font-size: 14.5px; color: var(--navy); margin-top: 20px; margin-bottom: 6px; }
+  p, li { font-size: 14.5px; color: var(--ink); }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 14px 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 12px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-soft); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .warn {
+    background: #FFF1DD;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    color: #8a5a00;
+    margin: 16px 0;
+  }
+  a { color: #2452D9; }
+  footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img src="/icons/icon-72.png" alt="NewsFlow" onerror="this.style.display='none'" />
+    <h1>News<span>Flow</span> — Privacy Policy</h1>
+  </header>
+  <p class="updated">Last updated: [FILL IN DATE BEFORE PUBLISHING]</p>
+
+  <div class="warn">
+    <strong>Before you publish this:</strong> this is a working draft covering what the
+    app actually collects, written for you to review, edit, and — because NewsFlow
+    collects some sensitive information (political affiliation, precise location details,
+    and contact details of people who never signed up themselves via Ad Leads) — have
+    checked by a lawyer familiar with India's <strong>Digital Personal Data Protection Act,
+    2023 (DPDP Act)</strong> before this goes live on the Play Store. Fill in the bracketed
+    placeholders (business name/address, contact email) before publishing.
+  </div>
+
+  <h2>1. Who this policy covers</h2>
+  <p>
+    This Privacy Policy explains how NewsFlow ("we", "us", "the app") collects, uses,
+    stores, and shares information from readers, citizen journalists, and administrators
+    who use the NewsFlow app and website (newsflowshots.web.app), operated by
+    <strong>[YOUR NAME / BUSINESS NAME]</strong>, based in
+    <strong>[YOUR CITY, STATE, INDIA]</strong>.
+  </p>
+
+  <h2>2. Information we collect</h2>
+
+  <h3>2.1 Account information (all users)</h3>
+  <table>
+    <tr><th>Data</th><th>Why we collect it</th></tr>
+    <tr><td>Name</td><td>Displayed on your profile and on reports you publish (unless you choose to post anonymously)</td></tr>
+    <tr><td>Email address</td><td>Account login and identification</td></tr>
+    <tr><td>Phone number</td><td>Account contact, verification</td></tr>
+    <tr><td>Password</td><td>Stored securely (hashed) via Firebase Authentication — we never see or store your plain-text password</td></tr>
+    <tr><td>Preferred language (Telugu/English)</td><td>To show the app in your preferred language</td></tr>
+    <tr><td>District</td><td>To show you local news first, and (for journalists) to restrict reporting to your own registered district</td></tr>
+  </table>
+
+  <h3>2.2 Additional information (journalists only)</h3>
+  <p>To register as a citizen journalist, we additionally collect:</p>
+  <table>
+    <tr><th>Data</th><th>Why we collect it</th></tr>
+    <tr><td>Full legal name</td><td>Editorial accountability for published reports</td></tr>
+    <tr><td>Village/town, Mandal, Assembly Constituency</td><td>To verify your local reporting area and route reports correctly</td></tr>
+    <tr><td>Political party affiliation (if any)</td><td>Disclosed to admins only, to help maintain balanced, transparent reporting — never shown to readers</td></tr>
+    <tr><td>Profile photo (optional)</td><td>Displayed on your public journalist profile</td></tr>
+  </table>
+  <p>
+    <strong>Political affiliation is sensitive personal data.</strong> We collect it only
+    with your explicit consent during registration, we do not publish it, and it is visible
+    only to app administrators for internal editorial-fairness purposes.
+  </p>
+
+  <h3>2.3 Content you submit</h3>
+  <ul>
+    <li>Text reports, headlines, and summaries you write or that our AI assistant generates from your notes</li>
+    <li>Photos, videos (up to 90 seconds), and voice recordings you upload with a report</li>
+    <li>Comments and replies you post on articles</li>
+    <li>Likes, dislikes, and bookmarks on articles</li>
+  </ul>
+
+  <h3>2.4 Local advertisement leads (journalists)</h3>
+  <p>
+    If you submit a business lead for potential advertising (e.g. a shop opening, an
+    event, an obituary notice), we collect the <strong>business/contact name and phone
+    number you provide us</strong>. This may be a third party who has not created an
+    account with NewsFlow. We use this information solely to allow our marketing team
+    to follow up about advertising — we do not use it for any other purpose, and we do
+    not sell or share it outside NewsFlow.
+  </p>
+
+  <h3>2.5 Wallet and earnings information</h3>
+  <ul>
+    <li>NewsFlow points earned for approved reports (10 points per approved own-district report)</li>
+    <li>Advertising commission earnings, where applicable</li>
+    <li>Withdrawal requests you submit (amount requested)</li>
+  </ul>
+  <p>
+    Withdrawal payouts are currently processed manually via bank transfer or UPI outside
+    the app. We do not store your bank account or UPI ID inside the app database — payment
+    details are exchanged directly with our team when a withdrawal is approved.
+  </p>
+
+  <h3>2.6 Push notification token</h3>
+  <p>
+    If you allow notifications, we store a device-specific messaging token (via Firebase
+    Cloud Messaging) so we can send you news alerts. You can disable this at any time in
+    your device's notification settings — this stops new notifications but does not
+    delete previously collected data automatically; contact us to request deletion.
+  </p>
+
+  <h3>2.7 Automatically collected information</h3>
+  <ul>
+    <li>App usage data (which articles you view, for view counts)</li>
+    <li>Your selected district and language preference, stored locally on your device (localStorage) so your choice persists between visits</li>
+  </ul>
+
+  <h2>3. How we use your information</h2>
+  <ul>
+    <li>To operate the news feed, journalist submission, and admin review workflow</li>
+    <li>To personalize your feed by district/language</li>
+    <li>To pay journalists their earned wallet points and advertising commissions</li>
+    <li>To send push notifications about new stories and local advertisements</li>
+    <li>To moderate content and enforce our journalist guidelines (originality, accuracy,
+    sensitivity, and ethics) — including restricting accounts that violate these rules</li>
+    <li>To improve the app and diagnose technical issues</li>
+  </ul>
+
+  <h2>4. Third-party services we use</h2>
+  <p>NewsFlow is built on the following third-party infrastructure, each of which processes data on our behalf:</p>
+  <table>
+    <tr><th>Service</th><th>Purpose</th></tr>
+    <tr><td>Google Firebase (Authentication, Firestore, Storage, Cloud Messaging, Hosting)</td><td>Account management, database, file storage, push notifications, website hosting</td></tr>
+    <tr><td>GroqCloud (AI language models)</td><td>Converting journalist voice notes to text and generating article drafts from raw notes — your submitted report text/audio is sent to Groq's API for this processing</td></tr>
+    <tr><td>NewsData.io / public RSS feeds</td><td>Source of some aggregated news content (not related to your personal data)</td></tr>
+  </table>
+  <p>
+    These providers may process data outside India. We select providers that maintain
+    industry-standard security practices, but we encourage you to review
+    <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Google Firebase's privacy policy</a>
+    and <a href="https://groq.com/privacy-policy/" target="_blank" rel="noopener">Groq's privacy policy</a> as well.
+  </p>
+
+  <h2>5. Data sharing</h2>
+  <p>We do not sell your personal data. We share data only:</p>
+  <ul>
+    <li>With the third-party service providers listed above, strictly to operate the app</li>
+    <li>Publicly, for content you choose to publish (your report, your name if you opt to show it, your profile photo)</li>
+    <li>If required by law, regulation, or a valid legal request from Indian authorities</li>
+  </ul>
+
+  <h2>6. Data retention</h2>
+  <p>
+    We retain your account data for as long as your account is active. Published news
+    articles remain publicly accessible (or hidden by an admin) as part of the public
+    record, even if you later delete your account, unless you specifically request removal.
+    Draft reports awaiting approval are retained for review purposes.
+  </p>
+
+  <h2>7. Your rights</h2>
+  <ul>
+    <li><strong>Access:</strong> You can view your profile information within the app at any time.</li>
+    <li><strong>Correction:</strong> You can update your name, phone, language, district, and profile photo directly in the app.</li>
+    <li><strong>Deletion:</strong> You may request deletion of your account and associated personal data by contacting us at the email below. We will process such requests in line with the DPDP Act, 2023, subject to reasonable exceptions (e.g. records we must retain for legal or financial compliance).</li>
+    <li><strong>Withdraw consent:</strong> You may disable notifications at any time, and journalists may request removal of political affiliation data by contacting us.</li>
+  </ul>
+
+  <h2>8. Children's privacy</h2>
+  <p>
+    NewsFlow is not directed at children under 18. We do not knowingly collect personal
+    data from children. If you believe a child has provided us with personal data, please
+    contact us so we can remove it.
+  </p>
+
+  <h2>9. Security</h2>
+  <p>
+    We use Firebase's security infrastructure, including authentication, encrypted data
+    transmission (HTTPS), and access-control rules that restrict who can read or write
+    different types of data (e.g. only admins can view journalists' political affiliation
+    or approve withdrawal requests). No system is 100% secure, and we cannot guarantee
+    absolute security of information transmitted to the app.
+  </p>
+
+  <h2>10. Changes to this policy</h2>
+  <p>
+    We may update this Privacy Policy from time to time. Material changes will be reflected
+    by updating the "Last updated" date at the top of this page. Continued use of NewsFlow
+    after changes constitutes acceptance of the revised policy.
+  </p>
+
+  <h2>11. Contact us</h2>
+  <p>
+    For privacy questions, data access, or deletion requests, contact:<br />
+    <strong>[YOUR NAME / BUSINESS NAME]</strong><br />
+    Email: <strong>[YOUR CONTACT EMAIL]</strong><br />
+    Address: <strong>[YOUR CITY, STATE, INDIA]</strong>
+  </p>
+
+  <footer>
+    NewsFlow — Fast. Local. Trusted. · Telugu &amp; English news for Andhra Pradesh &amp; Telangana
+  </footer>
+
+</div>
+</body>
+</html>

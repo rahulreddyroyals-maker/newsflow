@@ -1,8 +1,8 @@
 // src/components/ReelsFeed.jsx
-// CHANGE: headline moved off the image overlay — now appears below the
-// action bar, above the article text, as a proper heading (matches how
-// the standalone NewsDetail page already displays it). The image overlay
-// now only shows the category chip and district/source line.
+// FIX: headline and తె/EN toggle now sit on the same row (flex, headline
+// takes remaining space, toggle stays compact on the right) instead of the
+// toggle sitting alone on its own row above the headline with extra vertical
+// gap. Everything else unchanged from the previous version.
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -114,7 +114,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
         <ImageWatermark size="lg" />
         <div style={gradientStyle} />
 
-        {/* Only the category chip lives on the image now — headline moved below */}
         <div style={topCaptionStyle}>
           <span className="nf-chip" style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'transparent', color: '#fff' }}>
             {categoryLabel(news.category, lang)}
@@ -145,17 +144,16 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             />
           </div>
           <div style={textPaneStyle}>
-            {news.headlineEn && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            {/* Headline and language toggle now share one row */}
+            <div style={headlineRowStyle}>
+              <h2 style={headlineTextStyle}>{headline}</h2>
+              {news.headlineEn && (
                 <div style={slideLangToggleStyle}>
                   <button onClick={() => setSlideLang('te')} style={slideLangBtnStyle(slideLang === 'te')}>తె</button>
                   <button onClick={() => setSlideLang('en')} style={slideLangBtnStyle(slideLang === 'en')}>EN</button>
                 </div>
-              </div>
-            )}
-
-            {/* Headline now lives here — below the image and action bar */}
-            <h2 style={headlineTextStyle}>{headline}</h2>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8, fontSize: 11.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 14 }}>
               <span>{news.district}</span>
               <span>•</span>
@@ -217,7 +215,8 @@ const topCaptionStyle = { position: 'absolute', left: 16, top: 60, zIndex: 2, po
 const actionBarStripStyle = { flexShrink: 0, padding: '10px 16px', background: 'var(--nf-paper)', borderBottom: '1px solid var(--nf-line)' }
 const overlayActionBarStyle = { position: 'absolute', left: 0, right: 0, bottom: 56, zIndex: 3, padding: '0 16px' }
 const textPaneStyle = { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', background: 'var(--nf-paper)', padding: '18px 18px 32px', WebkitOverflowScrolling: 'touch' }
-const headlineTextStyle = { fontSize: 20, lineHeight: 1.35, color: 'var(--nf-navy)', fontWeight: 800, marginBottom: 8 }
-const slideLangToggleStyle = { display: 'flex', border: '1.5px solid var(--nf-line)', borderRadius: 999, overflow: 'hidden' }
+const headlineRowStyle = { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }
+const headlineTextStyle = { fontSize: 20, lineHeight: 1.35, color: 'var(--nf-navy)', fontWeight: 800, margin: 0, flex: 1 }
+const slideLangToggleStyle = { display: 'flex', border: '1.5px solid var(--nf-line)', borderRadius: 999, overflow: 'hidden', flexShrink: 0 }
 const slideLangBtnStyle = (active) => ({ border: 'none', padding: '5px 12px', fontSize: 12, fontWeight: 700, background: active ? 'var(--nf-navy)' : 'transparent', color: active ? '#fff' : 'var(--nf-ink-soft)' })
 const barBtnStyle = { border: 'none', background: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }

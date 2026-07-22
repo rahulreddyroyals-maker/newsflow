@@ -1,0 +1,33 @@
+// PATCH for src/App.jsx
+// Add this import near your other admin imports:
+import ManageAdmins from './admin/ManageAdmins'
+
+// Add this route inside <Routes>:
+<Route path="/admin/manage-admins" element={<ManageAdmins />} />
+
+
+// PATCH for src/admin/Dashboard.jsx
+// Add this button anywhere in the button list (e.g. right after
+// "Manage Journalists"):
+<button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 30 }} onClick={() => navigate('/admin/manage-admins')}>
+  👥 Manage Admins
+</button>
+
+
+// ALSO — for the Cloud Function to work, your existing functions/index.js
+// needs `getAuth` imported and the Firestore `db` already initialized above
+// the new function. If your current functions/index.js starts like this:
+//
+//   const { initializeApp } = require('firebase-admin/app')
+//   const { getFirestore } = require('firebase-admin/firestore')
+//   const { getMessaging } = require('firebase-admin/messaging')
+//   initializeApp()
+//   const db = getFirestore()
+//
+// then just ADD this one import near the top:
+//   const { getAuth } = require('firebase-admin/auth')
+//
+// and paste the new exports.createAdminAccount function (from
+// functions/index.js in this zip) at the end of the file — do NOT replace
+// your existing sendNewsDigest / onNewsPublished / onAdPublished functions,
+// just add this one alongside them.
