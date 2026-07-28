@@ -1,0 +1,20 @@
+// ADD to your existing firestore.rules — inside the main match block,
+// alongside your other collection rules (adLeads, withdrawalRequests, etc.)
+
+    // ── Classifieds ───────────────────────────────────────────────────────────
+    // Anyone signed in can post (pending review); readers see approved only;
+    // only admins moderate.
+    match /classifieds/{itemId} {
+      allow read: if resource.data.get('status', 'pending') == 'approved' || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.postedBy == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Error logs ────────────────────────────────────────────────────────────
+    // Anyone (including logged-out visitors) can write an error report;
+    // only admins can read/clear them. No update allowed (logs are immutable).
+    match /errorLogs/{logId} {
+      allow create: if true;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }

@@ -1,13 +1,4 @@
-// src/services/newsService.js - FEED SECTION PATCH
-// Replace your existing listenToFeed function with this one.
-//
-// Behaviour:
-//   district = 'All'  → fetch all news, sort by date (no filtering)
-//   district = X      → fetch all news, sort: X-district first, then rest by date
-//
-// This ensures readers always see ALL news regardless of district selection —
-// selecting a district just prioritises local stories at the top.
-
+// src/services/newsService.js
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   query, where, limit, onSnapshot, serverTimestamp, increment, arrayUnion, arrayRemove
@@ -23,36 +14,18 @@ function sortByCreatedAtAsc(docs) {
 }
 
 // ---------- NEWS FEED ----------
-// Always fetches ALL approved news (category-filtered only if set).
-// District filtering is done client-side: if a specific district is selected,
-// that district's stories bubble to the top, then everything else follows —
-// readers always get all news no matter what district they picked.
+// Always fetches ALL approved news (category-filtered only if set). District
+// filtering/sorting happens client-side in Home.jsx — see that file's
+// sortFeed() for why (avoids Firestore's 30-item `in` query cap and lets
+// "All" always mean literally everything).
 export function listenToFeed({ category }, callback, onError) {
-  // Import these at the top of your newsService.js if not already there:
-  // import { collection, query, where, limit, onSnapshot } from 'firebase/firestore'
-  
   const clauses = [where('status', '==', 'approved')]
-  
-  // Category filter only — never filter by district server-side
-  if (category && category !== 'All') {
-    clauses.push(where('category', '==', category))
-  }
-  
+  if (category && category !== 'All') clauses.push(where('category', '==', category))
   const q = query(collection(db, 'news'), ...clauses, limit(200))
-  
   return onSnapshot(
     q,
-    (snap) => {
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      // Sort newest first
-      all.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-      callback(all)
-    },
-    (err) => {
-      console.error('listenToFeed failed:', err)
-      onError?.(err)
-      callback([])
-    }
+    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
+    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
   )
 }
 
@@ -66,6 +39,9 @@ export async function incrementViewCount(id) {
 }
 
 export async function searchNews(keyword) {
+  // Client-side fallback — the primary search path is now the searchNewsFn
+  // Cloud Function (see src/pages/Search.jsx), which scans the full corpus.
+  // This function is kept for any place still calling it directly.
   const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
   const docs = sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   const lower = keyword.trim().toLowerCase()
@@ -92,7 +68,7 @@ export async function toggleBookmark(uid, newsId, isBookmarked) {
   })
 }
 
-// ---------- DRAFTS ----------
+// ---------- DRAFTS (journalist submissions, pre-approval) ----------
 export async function createDraft(draft) {
   const ref = await addDoc(collection(db, 'drafts'), {
     ...draft,
@@ -126,6 +102,12 @@ export async function updateDraft(id, data) {
 
 export const POINTS_PER_APPROVED_REPORT = 10
 
+// Approve: copies the draft into the public `news` collection, marks the
+// draft approved, and credits wallet points for own-district journalist
+// reports. The published doc's createdAt uses the ORIGINAL draft submission
+// timestamp (rest.createdAt) rather than a fresh serverTimestamp() at
+// approval time — otherwise a report's recency ranking would depend on how
+// quickly an admin happened to review it, not when it was actually filed.
 export async function approveDraft(draftEntry) {
   const { id, ...rest } = draftEntry
   await addDoc(collection(db, 'news'), {
@@ -146,9 +128,10 @@ export async function approveDraft(draftEntry) {
     views: 0,
     likedBy: [],
     dislikedBy: [],
-    createdAt: serverTimestamp()
+    createdAt: rest.createdAt || serverTimestamp()
   })
   await updateDoc(doc(db, 'drafts', id), { status: 'approved' })
+
   if (rest.authorId && rest.authorId !== 'system-rss' && rest.authorId !== 'admin') {
     const authorSnap = await getDoc(doc(db, 'users', rest.authorId))
     if (authorSnap.exists() && authorSnap.data().district === rest.district) {
@@ -192,7 +175,7 @@ export async function uploadProfilePhoto(file, uid) {
   return getDownloadURL(storageRef)
 }
 
-// ---------- ADMIN ----------
+// ---------- ADMIN ANALYTICS ----------
 export async function getDashboardCounts() {
   const [newsSnap, pendingSnap, journalistsSnap, readersSnap] = await Promise.all([
     getDocs(query(collection(db, 'news'))),
@@ -221,6 +204,7 @@ export async function setJournalistSuspended(uid, suspended) {
   await updateDoc(doc(db, 'users', uid), { suspended })
 }
 
+// ---------- ADMIN: direct upload + manage published news ----------
 export async function publishNewsDirectly(data) {
   const ref = await addDoc(collection(db, 'news'), {
     headline: data.headline,
@@ -258,7 +242,7 @@ export async function deleteNews(id) {
   await deleteDoc(doc(db, 'news', id))
 }
 
-// ---------- REACTIONS ----------
+// ---------- LIKES / DISLIKES ----------
 export async function setReaction(newsId, uid, type, current) {
   const { likedBy = [], dislikedBy = [] } = current
   const isLiked = likedBy.includes(uid)

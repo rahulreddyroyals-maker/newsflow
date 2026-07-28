@@ -8,6 +8,7 @@ import { categoryLabel } from '../utils/categories'
 import ImageWatermark from '../components/ImageWatermark'
 import CommentsPanel from '../components/CommentsPanel'
 import { ThumbsUpIcon, ThumbsDownIcon, CommentIcon, SaveIcon, WhatsAppIcon } from '../components/ActionIcons'
+import { Events } from '../services/analytics'
 
 const ANONYMOUS_BYLINES = new Set(['NewsFlow', 'NewsFlow Citizen Journalist', 'NewsFlow Reporter'])
 const NON_PROFILE_AUTHOR_IDS = new Set(['system-rss', 'admin'])
@@ -31,12 +32,13 @@ export default function NewsDetail() {
   const [imgIndex, setImgIndex] = useState(0)
   const [isPortraitVideo, setIsPortraitVideo] = useState(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
-  // Per-article language toggle — independent of the global app language so
-  // a reader can read this article in English without changing the whole feed.
   const [articleLang, setArticleLang] = useState(lang)
 
   useEffect(() => {
-    getNewsById(id).then(setNews)
+    getNewsById(id).then((n) => {
+      setNews(n)
+      if (n) Events.viewArticle(n)
+    })
     incrementViewCount(id)
   }, [id])
 
@@ -62,6 +64,7 @@ export default function NewsDetail() {
     if (!user) return navigate('/login')
     await toggleBookmark(user.uid, id, isBookmarked)
     refreshProfile()
+    if (!isBookmarked) Events.bookmark(id)
   }
 
   async function handleReaction(type) {
@@ -87,6 +90,7 @@ export default function NewsDetail() {
     const shareUrl = window.location.href
     const headline = articleLang === 'en' && news.headlineEn ? news.headlineEn : news.headline
     window.open(`https://wa.me/?text=${encodeURIComponent(headline + '\n' + shareUrl)}`, '_blank')
+    Events.share(id)
   }
 
   const videoIsPortrait = news.videoUrl && isPortraitVideo === true
@@ -195,6 +199,8 @@ const backBtnStyle = {
 }
 const dotsRow = { position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }
 const dotStyle = { width: 6, height: 6, borderRadius: '50%', background: '#fff' }
+const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16, flexWrap: 'wrap' }
+const authorLinkStyle = { border: 'none', background: 'none', padding: 0, font: 'inherit', color: 'var(--nf-blue)', fontWeight: 700 }
 const actionBarStripStyle = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -209,8 +215,6 @@ const barBtnStyle = {
   flexDirection: 'column',
   alignItems: 'center'
 }
-const metaStyle = { display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--nf-ink-faint)', fontWeight: 600, marginBottom: 16, flexWrap: 'wrap' }
-const authorLinkStyle = { border: 'none', background: 'none', padding: 0, font: 'inherit', color: 'var(--nf-blue)', fontWeight: 700 }
 const langToggleStyle = {
   display: 'flex',
   border: '1.5px solid var(--nf-line)',

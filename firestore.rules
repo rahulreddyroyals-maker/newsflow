@@ -37,13 +37,25 @@ service cloud.firestore {
     }
 
     // ── Advertisements ────────────────────────────────────────────────────────
-    // THIS COLLECTION WAS MISSING FROM THE LIVE RULES — that's what caused
-    // "Missing or insufficient permissions" when publishing an ad.
     match /advertisements/{adId} {
       allow read: if resource.data.get('status', 'active') == 'active' || isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ── Classifieds ───────────────────────────────────────────────────────────
+    match /classifieds/{itemId} {
+      allow read: if resource.data.get('status', 'pending') == 'approved' || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.postedBy == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Error logs ────────────────────────────────────────────────────────────
+    match /errorLogs/{logId} {
+      allow create: if true;
+      allow read, delete: if isAdmin();
+      allow update: if false;
     }
 
     // ── Categories / Districts (static reference) ─────────────────────────────

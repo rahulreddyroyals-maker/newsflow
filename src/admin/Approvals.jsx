@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage, uploadVideo } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
+import { Events } from '../services/analytics'
 
 export default function Approvals() {
   const { isAdmin } = useAuth()
@@ -28,7 +29,7 @@ export default function Approvals() {
 
   function startEdit(d) {
     setEditingId(d.id)
-    setExpandedId(d.id) // editing implies seeing the full article
+    setExpandedId(d.id)
     setEdits({
       headline: d.headline, summary: d.summary, article: d.article,
       headlineEn: d.headlineEn || '', summaryEn: d.summaryEn || '', articleEn: d.articleEn || '',
@@ -62,11 +63,10 @@ export default function Approvals() {
 
   async function handleApprove(d) {
     setBusyId(d.id)
-    // If there are unsaved edits open for this draft, save them first so
-    // what gets published matches what the admin just reviewed.
     const toApprove = editingId === d.id ? { ...d, ...edits } : d
     if (editingId === d.id) await updateDraft(d.id, edits)
     await approveDraft(toApprove)
+    Events.approveReport(d.district, d.category)
     setBusyId(null)
     setEditingId(null)
   }
@@ -123,6 +123,15 @@ export default function Approvals() {
                   <input type="file" accept="video/*" onChange={(e) => e.target.files[0] && handleVideoReplace(e.target.files[0])} style={{ marginBottom: 6 }} />
                   {videoError && <p style={{ color: 'var(--nf-danger)', fontSize: 12, marginBottom: 10 }}>{videoError}</p>}
                 </>
+              )}
+
+              {/* Duplicate warning — flagged when the journalist submitted, shown here regardless of edit mode */}
+              {d.possibleDuplicate && (
+                <div style={{ background: '#FFF1DD', borderRadius: 8, padding: 10, margin: '8px 0' }}>
+                  <p style={{ fontSize: 11.5, color: 'var(--nf-warning)', fontWeight: 700 }}>
+                    ⚠ {d.duplicateSimilarity}% similar to a recent report: "{d.duplicateOfHeadline}"
+                  </p>
+                </div>
               )}
 
               {editing ? (

@@ -1,9 +1,11 @@
 // src/journalist/AIDraftPreview.jsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { createDraft } from '../services/newsService'
 import { translateDraft } from '../services/groq'
+import { findPossibleDuplicate } from '../services/duplicateCheck'
+import { Events } from '../services/analytics'
 
 export default function AIDraftPreview() {
   const { state } = useLocation()
@@ -13,6 +15,25 @@ export default function AIDraftPreview() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState(state || null)
+  const [dupWarning, setDupWarning] = useState(null)
+  const [checkingDup, setCheckingDup] = useState(false)
+
+  // Runs once in the background as soon as the draft loads — never blocks
+  // reading/editing while it checks.
+  useEffect(() => {
+    if (!draft?.headline) return
+    setCheckingDup(true)
+    findPossibleDuplicate({
+      headline: draft.headline,
+      summary: draft.summary,
+      district: draft.district,
+      category: draft.category
+    }).then((result) => {
+      setDupWarning(result.isDuplicate ? result : null)
+      setCheckingDup(false)
+    }).catch(() => setCheckingDup(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.headline])
 
   if (!draft) {
     return (
@@ -53,14 +74,19 @@ export default function AIDraftPreview() {
   async function handleSubmit() {
     setBusy(true)
     setError('')
+
+    // Defensive check matching the Firestore rule — a mismatch here means
+    // the draft's district doesn't match the journalist's own registered
+    // district, which the rules will reject anyway. Catching it here gives
+    // a clear, specific reason instead of a generic permission error.
     const draftDistrict = (draft.district || '').trim()
     const profileDistrict = (profile?.district || '').trim()
     if (draftDistrict !== profileDistrict) {
-      console.error('District mismatch blocking submit:', { draftDistrict, profileDistrict })
-      setError(`This draft's district ("${draftDistrict}") doesn't exactly match your registered district ("${profileDistrict}") — Firestore will reject it. Go back and resubmit from the form, which locks the district to your own automatically. If these look identical to you, there may be invisible whitespace — ask an admin to re-save your district in Manage Journalists.`)
+      setError(`This draft's district ("${draftDistrict}") doesn't exactly match your registered district ("${profileDistrict}"). Go back and resubmit from the form, which locks the district to your own automatically. If these look identical, ask an admin to re-save your district in Manage Journalists.`)
       setBusy(false)
       return
     }
+
     try {
       await createDraft({
         headline: draft.headline,
@@ -76,15 +102,19 @@ export default function AIDraftPreview() {
         audioUrl: draft.audioUrl || null,
         rawText: draft.rawText || '',
         authorId: user.uid,
-        authorName: draft.showNameThisPost === false ? 'NewsFlow Citizen Journalist' : (profile?.name || 'NewsFlow Reporter')
+        authorName: draft.showNameThisPost === false ? 'NewsFlow Citizen Journalist' : (profile?.name || 'NewsFlow Reporter'),
+        possibleDuplicate: dupWarning?.isDuplicate || false,
+        duplicateSimilarity: dupWarning?.similarity || 0,
+        duplicateOfHeadline: dupWarning?.matchedItem?.headline || null
       })
+      Events.submitReport(draft.district, draft.category)
       navigate('/journalist', { replace: true })
     } catch (err) {
       console.error('createDraft failed:', err)
       const isPermissionError = err.code === 'permission-denied' || /permission/i.test(err.message || '')
       setError(
         isPermissionError
-          ? `Could not submit: Firestore rejected this with "permission-denied." This almost always means the rules deployed to your live Firebase project are out of date — run "firebase deploy --only firestore:rules" from the project folder, then try again.`
+          ? 'Could not submit: Firestore rejected this with "permission-denied." This almost always means the live rules are out of date — an admin needs to run "firebase deploy --only firestore:rules".'
           : 'Could not submit: ' + (err.message || 'unknown error')
       )
     } finally {
@@ -100,17 +130,30 @@ export default function AIDraftPreview() {
       </div>
 
       <div className="nf-scroll-body nf-container" style={{ paddingTop: 18 }}>
-        {draft.transcriptionWarning && (
-          <div style={{ background: '#FFF1DD', borderRadius: 10, padding: 12, marginBottom: 16 }}>
-            <p style={{ fontSize: 12.5, color: 'var(--nf-warning)', fontWeight: 600 }}>
-              ⚠ {draft.transcriptionWarning}Review the draft below carefully since it's based only on what you typed.
-            </p>
-          </div>
-        )}
-
         {draft.images?.length > 0 && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto' }}>
             {draft.images.map((url, i) => <img key={i} src={url} alt="" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />)}
+          </div>
+        )}
+
+        {draft.videoUrl && (
+          <video controls src={draft.videoUrl} style={{ width: '100%', maxHeight: 200, borderRadius: 10, marginBottom: 16 }} />
+        )}
+
+        {checkingDup && (
+          <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginBottom: 10 }}>
+            Checking for similar recent reports…
+          </p>
+        )}
+        {dupWarning?.isDuplicate && (
+          <div style={{ background: '#FFF1DD', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--nf-warning)', fontWeight: 700 }}>
+              ⚠ This looks {dupWarning.similarity}% similar to a recent report:
+              "{dupWarning.matchedItem?.headline}"
+            </p>
+            <p style={{ fontSize: 11.5, color: 'var(--nf-warning)', marginTop: 4 }}>
+              You can still submit — an admin will review both and decide whether to merge or reject.
+            </p>
           </div>
         )}
 

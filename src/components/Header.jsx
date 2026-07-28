@@ -11,6 +11,9 @@ const SearchIcon = (p) => (
 const ReelsIcon = (p) => (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" {...p}><rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="2"/><path d="M9 9.5v5l4.5-2.5L9 9.5Z" fill="currentColor"/></svg>
 )
+const ClassifiedsIcon = (p) => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" {...p}><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M3 9h18M8 13h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+)
 
 export default function Header({ district, onDistrictTap, onReelsTap, hasNotifications }) {
   const navigate = useNavigate()
@@ -31,13 +34,16 @@ export default function Header({ district, onDistrictTap, onReelsTap, hasNotific
           )}
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={toggleLang} style={langBtnStyle}>{lang === 'te' ? 'EN' : 'తె'}</button>
         {onReelsTap && (
           <button onClick={onReelsTap} style={iconBtnStyle} aria-label="Reels view">
             <ReelsIcon style={{ color: 'var(--nf-navy)' }} />
           </button>
         )}
+        <button onClick={() => navigate('/classifieds')} style={iconBtnStyle} aria-label="Classifieds">
+          <ClassifiedsIcon style={{ color: 'var(--nf-navy)' }} />
+        </button>
         <button onClick={() => navigate('/search')} style={iconBtnStyle} aria-label="Search">
           <SearchIcon style={{ color: 'var(--nf-navy)' }} />
         </button>
@@ -60,7 +66,7 @@ const headerStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '0 14px'
+  padding: '0 12px'
 }
 const districtBtnStyle = {
   border: 'none',
@@ -86,7 +92,7 @@ const iconBtnStyle = {
   border: 'none',
   background: 'none',
   position: 'relative',
-  padding: 4,
+  padding: 3,
   display: 'flex'
 }
 const dotStyle = {

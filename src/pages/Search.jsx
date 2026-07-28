@@ -1,8 +1,10 @@
 // src/pages/Search.jsx
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { searchNews } from '../services/newsService'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { app } from '../services/firebase'
 import { CompactNewsCard } from '../components/NewsCard'
+import { Events } from '../services/analytics'
 
 const RECENT_KEY = 'nf_recent_searches'
 const TRENDING = ['Andhra Pradesh budget', 'Cricket score', 'Govt jobs notification', 'Cinema release', 'Cyclone alert']
@@ -13,13 +15,23 @@ export default function Search() {
   const [results, setResults] = useState(null)
   const [recent, setRecent] = useState(() => JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'))
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   async function runSearch(term) {
     if (!term.trim()) return
     setBusy(true)
+    setError('')
     setQuery(term)
-    const res = await searchNews(term)
-    setResults(res)
+    try {
+      const functions = getFunctions(app, 'asia-south1')
+      const searchNewsFn = httpsCallable(functions, 'searchNewsFn')
+      const { data } = await searchNewsFn({ query: term })
+      setResults(data.results || [])
+      Events.search(term)
+    } catch (err) {
+      setError('Search failed — please try again.')
+      setResults([])
+    }
     const updated = [term, ...recent.filter((r) => r !== term)].slice(0, 6)
     setRecent(updated)
     localStorage.setItem(RECENT_KEY, JSON.stringify(updated))
@@ -47,20 +59,17 @@ export default function Search() {
           <>
             {recent.length > 0 && (
               <Section title="Recent searches">
-                {recent.map((r) => (
-                  <button key={r} className="nf-chip" style={{ marginRight: 8, marginBottom: 8 }} onClick={() => runSearch(r)}>{r}</button>
-                ))}
+                {recent.map((r) => <button key={r} className="nf-chip" style={{ marginRight: 8, marginBottom: 8 }} onClick={() => runSearch(r)}>{r}</button>)}
               </Section>
             )}
             <Section title="Trending searches">
-              {TRENDING.map((r) => (
-                <button key={r} className="nf-chip" style={{ marginRight: 8, marginBottom: 8 }} onClick={() => runSearch(r)}>🔥 {r}</button>
-              ))}
+              {TRENDING.map((r) => <button key={r} className="nf-chip" style={{ marginRight: 8, marginBottom: 8 }} onClick={() => runSearch(r)}>🔥 {r}</button>)}
             </Section>
           </>
         )}
 
         {busy && <p style={{ color: 'var(--nf-ink-soft)', fontSize: 14 }}>Searching…</p>}
+        {error && <p style={{ color: 'var(--nf-danger)', fontSize: 13 }}>{error}</p>}
 
         {results && !busy && (
           results.length === 0 ? (

@@ -1,8 +1,4 @@
 // src/components/ReelsFeed.jsx
-// FIX: headline and తె/EN toggle now sit on the same row (flex, headline
-// takes remaining space, toggle stays compact on the right) instead of the
-// toggle sitting alone on its own row above the headline with extra vertical
-// gap. Everything else unchanged from the previous version.
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -11,6 +7,7 @@ import { toggleBookmark, incrementViewCount, setReaction } from '../services/new
 import ImageWatermark from './ImageWatermark'
 import CommentsPanel from './CommentsPanel'
 import { ThumbsUpIcon, ThumbsDownIcon, CommentIcon, SaveIcon, WhatsAppIcon } from './ActionIcons'
+import { Events } from '../services/analytics'
 
 export default function ReelsFeed({ news, startIndex = 0, onClose }) {
   const containerRef = useRef(null)
@@ -58,13 +55,14 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
     if (!el) return
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !seen) { setSeen(true); incrementViewCount(news.id) }
+        if (entry.isIntersecting && !seen) { setSeen(true); incrementViewCount(news.id); Events.viewArticle(news) }
         if (!entry.isIntersecting && videoRef.current && !videoRef.current.paused) videoRef.current.pause()
       },
       { threshold: 0.5 }
     )
     observer.observe(el)
     return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seen, news.id])
 
   function handleVideoMeta(e) {
@@ -76,6 +74,7 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
     if (!user) return
     await toggleBookmark(user.uid, news.id, isBookmarked)
     refreshProfile()
+    if (!isBookmarked) Events.bookmark(news.id)
   }
 
   async function handleReaction(type) {
@@ -95,6 +94,7 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
   function handleShare() {
     const shareUrl = `${window.location.origin}/news/${news.id}`
     window.open(`https://wa.me/?text=${encodeURIComponent(headline + '\n' + shareUrl)}`, '_blank')
+    Events.share(news.id)
   }
 
   const fullBleed = news.videoUrl && isPortraitVideo === true
@@ -144,7 +144,6 @@ function ReelSlide({ news: initialNews, onOpenComments }) {
             />
           </div>
           <div style={textPaneStyle}>
-            {/* Headline and language toggle now share one row */}
             <div style={headlineRowStyle}>
               <h2 style={headlineTextStyle}>{headline}</h2>
               {news.headlineEn && (

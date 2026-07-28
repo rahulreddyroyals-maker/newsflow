@@ -1,10 +1,4 @@
 // src/admin/Dashboard.jsx
-// FIX: scroll wasn't working. In a flex-column parent (nf-screen), a
-// scrollable child needs min-height:0 explicitly — without it, some browsers
-// let the content's natural height push the flex item past the viewport
-// instead of clipping+scrolling it, especially once enough buttons/tiles
-// stack up to exceed one screen. Also gave the header flex-shrink:0 so it
-// can never be compressed or miscalculated as part of the scrollable area.
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -34,6 +28,19 @@ export default function AdminDashboard() {
     { label: 'Readers', value: counts?.readers, color: 'var(--nf-success)' }
   ]
 
+  const buttons = [
+    { label: 'Review Pending News →', variant: 'nf-btn-flow', path: '/admin/approvals' },
+    { label: '+ Upload News Directly', variant: 'nf-btn-primary', path: '/admin/upload' },
+    { label: '📺 Manage Advertisements', variant: 'nf-btn-ghost', path: '/admin/advertisements' },
+    { label: '🗂️ Pending Classifieds', variant: 'nf-btn-ghost', path: '/admin/manage-classifieds' },
+    { label: 'Edit / Hide Published News', variant: 'nf-btn-ghost', path: '/admin/manage-news' },
+    { label: '📢 Local Ad Leads', variant: 'nf-btn-ghost', path: '/admin/ad-leads' },
+    { label: '💰 Withdrawal Requests', variant: 'nf-btn-ghost', path: '/admin/withdrawals' },
+    { label: '👥 Manage Admins', variant: 'nf-btn-ghost', path: '/admin/manage-admins' },
+    { label: '🐛 Error Logs', variant: 'nf-btn-ghost', path: '/admin/error-logs' },
+    { label: 'Manage Journalists', variant: 'nf-btn-ghost', path: '/admin/journalists' }
+  ]
+
   return (
     <div style={screenStyle}>
       <div style={headerStyle}>
@@ -51,27 +58,16 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        <button className="nf-btn nf-btn-flow nf-btn-block" style={{ marginTop: 18 }} onClick={() => navigate('/admin/approvals')}>
-          Review Pending News →
-        </button>
-        <button className="nf-btn nf-btn-primary nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/upload')}>
-          + Upload News Directly
-        </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/advertisements')}>
-          📺 Manage Advertisements
-        </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/manage-news')}>
-          Edit / Hide Published News
-        </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/ad-leads')}>
-          📢 Local Ad Leads
-        </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10 }} onClick={() => navigate('/admin/withdrawals')}>
-          💰 Withdrawal Requests
-        </button>
-        <button className="nf-btn nf-btn-ghost nf-btn-block" style={{ marginTop: 10, marginBottom: 40 }} onClick={() => navigate('/admin/journalists')}>
-          Manage Journalists
-        </button>
+        {buttons.map((b, i) => (
+          <button
+            key={b.path}
+            className={`nf-btn ${b.variant} nf-btn-block`}
+            style={{ marginTop: i === 0 ? 18 : 10, marginBottom: i === buttons.length - 1 ? 40 : 0 }}
+            onClick={() => navigate(b.path)}
+          >
+            {b.label}
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -85,10 +81,6 @@ const tileStyle = {
   gap: 6,
   textAlign: 'left'
 }
-
-// Explicit inline styles (not relying solely on the shared .nf-screen /
-// .nf-scroll-body classes) so this page's scroll behaviour can't be broken
-// by a shared CSS rule changing elsewhere in the app.
 const screenStyle = {
   height: '100%',
   display: 'flex',

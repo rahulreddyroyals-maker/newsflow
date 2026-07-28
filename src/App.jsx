@@ -15,6 +15,8 @@ import JournalistProfile from './pages/JournalistProfile'
 import Bookmarks from './pages/Bookmarks'
 import Notifications from './pages/Notifications'
 import Profile from './pages/Profile'
+import Classifieds from './pages/Classifieds'
+import Premium from './pages/Premium'
 
 import JournalistDashboard from './journalist/Dashboard'
 import SubmitNews from './journalist/SubmitNews'
@@ -28,6 +30,9 @@ import ManageNews from './admin/ManageNews'
 import AdLeads from './admin/AdLeads'
 import Withdrawals from './admin/Withdrawals'
 import Advertisements from './admin/Advertisements'
+import ManageAdmins from './admin/ManageAdmins'
+import ErrorLogs from './admin/ErrorLogs'
+import ManageClassifieds from './admin/ManageClassifieds'
 
 function JournalistArea() {
   const { isJournalist } = useAuth()
@@ -51,6 +56,8 @@ function AppRoutes() {
         <Route path="/journalist-profile/:uid" element={<JournalistProfile />} />
         <Route path="/bookmarks" element={<Bookmarks />} />
         <Route path="/notifications" element={<Notifications />} />
+        <Route path="/classifieds" element={<Classifieds />} />
+        <Route path="/premium" element={<Premium />} />
 
         <Route path="/journalist" element={<JournalistArea />} />
         <Route path="/journalist/submit" element={<SubmitNews />} />
@@ -64,6 +71,9 @@ function AppRoutes() {
         <Route path="/admin/ad-leads" element={<AdLeads />} />
         <Route path="/admin/withdrawals" element={<Withdrawals />} />
         <Route path="/admin/advertisements" element={<Advertisements />} />
+        <Route path="/admin/manage-admins" element={<ManageAdmins />} />
+        <Route path="/admin/error-logs" element={<ErrorLogs />} />
+        <Route path="/admin/manage-classifieds" element={<ManageClassifieds />} />
 
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>

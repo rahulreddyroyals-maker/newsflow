@@ -1,0 +1,76 @@
+PATCH: wire duplicate detection into the submit + approve flow
+================================================================
+
+--- 1. src/journalist/AIDraftPreview.jsx ---
+
+Add this import at the top:
+  import { findPossibleDuplicate } from '../services/duplicateCheck'
+
+Add this state near your other useState calls:
+  const [dupWarning, setDupWarning] = useState(null)
+  const [checkingDup, setCheckingDup] = useState(false)
+
+Add this useEffect (runs once when the preview screen loads, checks in the
+background — doesn't block the user from reading/editing while it runs):
+
+  useEffect(() => {
+    if (!draft?.headline) return
+    setCheckingDup(true)
+    findPossibleDuplicate({
+      headline: draft.headline,
+      summary: draft.summary,
+      district: draft.district,
+      category: draft.category
+    }).then((result) => {
+      setDupWarning(result.isDuplicate ? result : null)
+      setCheckingDup(false)
+    }).catch(() => setCheckingDup(false))
+  }, [draft?.headline])
+
+Add this banner in your JSX, right after the transcriptionWarning banner
+(or near the top of the scrollable content):
+
+  {checkingDup && (
+    <p style={{ fontSize: 11.5, color: 'var(--nf-ink-faint)', marginBottom: 10 }}>
+      Checking for similar recent reports…
+    </p>
+  )}
+  {dupWarning?.isDuplicate && (
+    <div style={{ background: '#FFF1DD', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+      <p style={{ fontSize: 12.5, color: 'var(--nf-warning)', fontWeight: 700 }}>
+        ⚠ This looks {dupWarning.similarity}% similar to a recent report:
+        "{dupWarning.matchedItem?.headline}"
+      </p>
+      <p style={{ fontSize: 11.5, color: 'var(--nf-warning)', marginTop: 4 }}>
+        You can still submit — an admin will review both and decide whether
+        to merge or reject.
+      </p>
+    </div>
+  )}
+
+Then, in your handleSubmit, add the duplicate flag to what gets saved
+(so admin can see it too):
+
+  await createDraft({
+    ...
+    possibleDuplicate: dupWarning?.isDuplicate || false,
+    duplicateSimilarity: dupWarning?.similarity || 0,
+    duplicateOfHeadline: dupWarning?.matchedItem?.headline || null,
+    ...
+  })
+
+
+--- 2. src/admin/Approvals.jsx ---
+
+Add this near where you render each draft card, right after the headline:
+
+  {d.possibleDuplicate && (
+    <div style={{ background: '#FFF1DD', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+      <p style={{ fontSize: 11.5, color: 'var(--nf-warning)', fontWeight: 700 }}>
+        ⚠ {d.duplicateSimilarity}% similar to: "{d.duplicateOfHeadline}"
+      </p>
+    </div>
+  )}
+
+That's it — this surfaces the warning to admin without blocking anything;
+final call to merge/reject/approve-both stays with the human reviewer.
