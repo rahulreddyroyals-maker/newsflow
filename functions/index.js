@@ -1,22 +1,11 @@
 // functions/index.js
-// All Cloud Functions in one file. Deploy with: firebase deploy --only functions
-//
-// SETUP NEEDED before some of these work:
-//   - createAdminAccount: works immediately, no extra setup
-//   - searchNewsFn: works immediately, no extra setup
-//   - sendNewsDigest / onNewsPublished / onAdPublished: works immediately
-//     (needs VAPID key configured client-side for push to actually deliver —
-//     see src/services/fcm.js from an earlier round)
-//   - createPremiumOrder / verifyPremiumPayment: needs a Razorpay account +
-//     secrets set via:
-//       firebase functions:secrets:set RAZORPAY_KEY_ID
-//       firebase functions:secrets:set RAZORPAY_KEY_SECRET
-//     and `npm install razorpay --save` inside this functions/ folder.
+// Razorpay/Premium removed for now — can be added back later without
+// touching anything else here. What's left needs zero extra setup beyond
+// what's already configured (no Secret Manager, no extra APIs to enable).
 
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onDocumentCreated } = require('firebase-functions/v2/firestore')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
-const { defineSecret } = require('firebase-functions/params')
 const { initializeApp } = require('firebase-admin/app')
 const { getFirestore } = require('firebase-admin/firestore')
 const { getMessaging } = require('firebase-admin/messaging')
@@ -156,64 +145,18 @@ exports.searchNewsFn = onCall({ region: 'asia-south1' }, async (request) => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PREMIUM SUBSCRIPTIONS (Razorpay) — requires secrets + `npm install razorpay`
+// PREMIUM (Razorpay) — REMOVED FOR NOW
 // ═══════════════════════════════════════════════════════════════════════════
-
-const Razorpay = require('razorpay')
-const crypto = require('crypto')
-
-const razorpayKeyId = defineSecret('RAZORPAY_KEY_ID')
-const razorpayKeySecret = defineSecret('RAZORPAY_KEY_SECRET')
-
-const PREMIUM_PLANS = {
-  monthly: { amountPaise: 4900, days: 30 },
-  yearly: { amountPaise: 39900, days: 365 }
-}
-
-exports.createPremiumOrder = onCall(
-  { region: 'asia-south1', secrets: [razorpayKeyId, razorpayKeySecret] },
-  async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.')
-    const plan = PREMIUM_PLANS[request.data?.plan]
-    if (!plan) throw new HttpsError('invalid-argument', 'Invalid plan.')
-
-    const instance = new Razorpay({ key_id: razorpayKeyId.value(), key_secret: razorpayKeySecret.value() })
-    const order = await instance.orders.create({
-      amount: plan.amountPaise,
-      currency: 'INR',
-      receipt: `premium_${request.auth.uid}_${Date.now()}`
-    })
-    return { orderId: order.id, amount: plan.amountPaise, keyId: razorpayKeyId.value() }
-  }
-)
-
-exports.verifyPremiumPayment = onCall(
-  { region: 'asia-south1', secrets: [razorpayKeySecret] },
-  async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.')
-    const { orderId, paymentId, signature, plan } = request.data || {}
-    if (!orderId || !paymentId || !signature || !PREMIUM_PLANS[plan]) {
-      throw new HttpsError('invalid-argument', 'Missing payment verification fields.')
-    }
-
-    const expected = crypto
-      .createHmac('sha256', razorpayKeySecret.value())
-      .update(`${orderId}|${paymentId}`)
-      .digest('hex')
-
-    if (expected !== signature) {
-      throw new HttpsError('permission-denied', 'Payment verification failed.')
-    }
-
-    const days = PREMIUM_PLANS[plan].days
-    const premiumUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-
-    await db.collection('users').doc(request.auth.uid).update({
-      isPremium: true,
-      premiumUntil,
-      premiumPlan: plan
-    })
-
-    return { success: true, premiumUntil: premiumUntil.toISOString() }
-  }
-)
+// When you're ready to bring this back:
+//   1. Enable the Secret Manager API for your project (this is what the
+//      earlier deploy error was about — it's a one-time toggle, not
+//      anything wrong with the code):
+//      console.developers.google.com/apis/api/secretmanager.googleapis.com/overview?project=newsflowshots
+//   2. `npm install razorpay --save` inside functions/
+//   3. Re-add the createPremiumOrder / verifyPremiumPayment functions
+//      (ask and I'll hand them back exactly as before)
+//   4. Set the two secrets: firebase functions:secrets:set RAZORPAY_KEY_ID
+//      and RAZORPAY_KEY_SECRET
+// Until then, src/pages/Premium.jsx will just show an error if someone
+// tries to subscribe — safe to leave the page in place unlinked, or remove
+// the /premium route from App.jsx if you'd rather it not exist at all yet.

@@ -16,7 +16,6 @@ import Bookmarks from './pages/Bookmarks'
 import Notifications from './pages/Notifications'
 import Profile from './pages/Profile'
 import Classifieds from './pages/Classifieds'
-import Premium from './pages/Premium'
 
 import JournalistDashboard from './journalist/Dashboard'
 import SubmitNews from './journalist/SubmitNews'
@@ -57,7 +56,9 @@ function AppRoutes() {
         <Route path="/bookmarks" element={<Bookmarks />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/classifieds" element={<Classifieds />} />
-        <Route path="/premium" element={<Premium />} />
+        {/* /premium route removed for now — Razorpay backend isn't deployed.
+            Re-add <Route path="/premium" element={<Premium />} /> (and the
+            import) once Razorpay is set up again. */}
 
         <Route path="/journalist" element={<JournalistArea />} />
         <Route path="/journalist/submit" element={<SubmitNews />} />
