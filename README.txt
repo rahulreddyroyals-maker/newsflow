@@ -1,112 +1,74 @@
-NewsFlow v28 — Complete files, ready to drop in
-==================================================
-Every file below is COMPLETE and OVERWRITE-READY — no patch notes to read,
-no manual code-merging. Copy each one into the matching path in your
-D:\newsflow project, overwriting what's there.
+NewsFlow v30 — Every article reachable in Trending and All (pagination)
+==========================================================================
 
-FILES IN THIS ZIP (all complete, all overwrite existing paths)
-------------------------------------------------------------------
-src/main.jsx
-src/App.jsx
-src/components/Header.jsx
-src/components/ReelsFeed.jsx
-src/components/AdSlot.jsx                    (NEW)
-src/admin/Dashboard.jsx
-src/admin/Approvals.jsx
-src/admin/ManageClassifieds.jsx              (NEW)
-src/admin/ErrorLogs.jsx                       (NEW)
-src/journalist/AIDraftPreview.jsx
-src/pages/NewsDetail.jsx
-src/pages/Search.jsx
-src/pages/Classifieds.jsx                    (NEW)
-src/pages/Premium.jsx                         (NEW)
-src/services/newsService.js
-src/services/analytics.js                     (NEW)
-src/services/duplicateCheck.js                (NEW)
-src/services/classifieds.js                   (NEW)
-functions/index.js
-functions/package.json
-firestore.rules
+THE ACTUAL BUG
+-----------------
+Category and district filtering were already correct — Trending includes
+every category, "All districts" never hides anything, both confirmed in
+earlier rounds. The real gap: the feed query had a hard cap of 200 articles.
+Once your total published archive passed 200, older approved articles
+simply stopped being fetched at all — not filtered out, never even
+requested from Firestore. That's why "every article" wasn't holding up:
+it wasn't a filtering bug, it was a ceiling.
 
-NOT included (unchanged from before — nothing to update):
-  everything else in your project: AuthContext.jsx, LanguageContext.jsx,
-  Login.jsx, Register.jsx, AdminLogin.jsx, Splash.jsx, SubmitNews.jsx,
-  WalletSection.jsx, AdLeadsSection.jsx, GuidelinesSection.jsx,
-  ManageJournalists.jsx, ManageNews.jsx, AdLeads.jsx, Withdrawals.jsx,
-  Advertisements.jsx, ManageAdmins.jsx, UploadNews.jsx, JournalistProfile.jsx,
-  CommentsPanel.jsx, ActionIcons.jsx, ImageWatermark.jsx, NewsCard.jsx,
-  CategoryTabs.jsx, DistrictSelector.jsx, Bookmarks.jsx, Notifications.jsx,
-  Profile.jsx, BottomNav.jsx, groq.js, firebase.js, fcm.js, wallet.js,
-  video.js, districts.js, categories.js, styles/index.css
+THE FIX
+---------
+Proper pagination instead of a bigger hard cap (which would just hit the
+same wall again later at a higher number):
+  - Feed now loads 100 articles at a time, live-synced for real-time updates
+  - A "Load older news" button appears at the bottom once there's more —
+    tapping it fetches the next 100, and so on, all the way through your
+    entire archive
+  - When you truly reach the end, it says "You've reached the end — N
+    articles total" so you know pagination is complete, not broken
 
 
-WHAT WORKS IMMEDIATELY (no account setup needed)
-====================================================
-- Analytics + error logging (Admin → 🐛 Error Logs)
-- Duplicate detection warnings (shown to journalist while reviewing draft,
-  and to admin in the approval queue)
-- Full-corpus search (Cloud Function, no more 200-article cap)
-- Classifieds — Jobs/Matrimony/Real Estate/Vehicles/Services, browse via
-  the 🗂️ icon in the header next to search, post via same page,
-  moderate via Admin → 🗂️ Pending Classifieds
-- Multi-admin management (from last round, included again for completeness)
-- Headline + language toggle on one line in Reels view
-- Original submission timestamp preserved through approval (fixes
-  recency ranking for reports that sit in the queue a while)
+FILES IN THIS ZIP (all complete, overwrite existing paths)
+--------------------------------------------------------------
+src/services/newsService.js   — paginated listenToFeed + new loadMoreNews()
+src/pages/Home.jsx             — "Load older news" button + pagination state
+firestore.indexes.json         — NEW, required for the ordered queries below
+firebase.json                  — updated to reference the new indexes file
 
 
-WHAT NEEDS YOUR OWN ACCOUNT (won't error, just does nothing until set up)
-=============================================================================
-
-ADSENSE (display ads) — src/components/AdSlot.jsx
-  1. Apply at ads.google.com (approval takes days-to-weeks for new sites)
-  2. Add to .env:  VITE_ADSENSE_CLIENT_ID=ca-pub-XXXXXXXXXXXXXXXX
-  3. Add the AdSense <script> tag to index.html <head> (they give you the
-     exact snippet once approved)
-  4. Create ad units in AdSense dashboard, each gives a slot ID
-  5. Drop <AdSlot slotId="1234567890" /> anywhere you want an ad to appear
-     (e.g. every few items in Home.jsx's news list)
-  6. Add public/ads.txt with the exact content AdSense gives you — ads
-     won't serve without this even if everything else is right
-
-RAZORPAY (premium subscriptions) — functions/index.js already has the code
-  1. Create account at razorpay.com, get Key ID + Key Secret (Settings →
-     API Keys). Start in Test Mode.
-  2. cd functions && npm install   (package.json already lists razorpay)
-  3. Set secrets:
-       firebase functions:secrets:set RAZORPAY_KEY_ID
-       firebase functions:secrets:set RAZORPAY_KEY_SECRET
-  4. Add to .env:  VITE_RAZORPAY_KEY_ID=rzp_test_XXXXXXXXXXXXX
-  5. Premium page is already routed at /premium — add a button to it
-     wherever you like, e.g. in Profile.jsx or journalist Dashboard.jsx:
-       <button onClick={() => navigate('/premium')}>⭐ Go Premium</button>
+WHY A NEW INDEXES FILE IS NEEDED
+------------------------------------
+Ordering by date (createdAt) while also filtering by status/category
+requires Firestore composite indexes — this is the same category-index
+limitation noted in earlier rounds, which is exactly why it was avoided
+originally (client-side sorting instead). Real pagination genuinely needs
+server-side ordering though, so this round adds the two specific indexes
+required: (status, createdAt) and (status, category, createdAt).
 
 
-DEPLOY
-========
+DEPLOY — note the extra step this time
+==========================================
   cd D:\newsflow
-  # copy every file from this zip into the matching path, overwriting
-
-  cd functions
-  npm install
-  cd ..
+  # copy all 4 files from this zip into your project, overwriting existing
 
   git add .
-  git commit -m "Analytics, duplicate detection, full-corpus search, classifieds, AdSense/Razorpay scaffolding, timestamp fix"
+  git commit -m "Add pagination so every article is reachable in Trending and All, not capped at 200"
   git push
 
-  firebase deploy --only functions
+  firebase deploy --only firestore:indexes
+  # ^ this is a NEW step — building composite indexes can take a few
+  #   minutes on Firebase's side after this command returns; the app will
+  #   show a "failed-precondition" error in the console if you skip this
+  #   and try to use the feed before the index finishes building
+
   npm run build
-  firebase deploy --only hosting,firestore:rules
+  firebase deploy --only hosting
 
 
-VERIFY AFTER DEPLOY
-======================
-1. Header now shows a 🗂️ classifieds icon next to search
-2. Post a test classified → check Admin → 🗂️ Pending Classifieds → approve it
-   → confirm it shows up when browsing Classifieds
-3. Submit a journalist report similar to an existing one → check the
-   preview screen shows a duplicate warning, and Admin Approvals shows it too
-4. Search for something → confirms results come back (Cloud Function working)
-5. Admin → 🐛 Error Logs loads (will be empty until something actually errors)
-6. Open a report in Reels view → headline and తె/EN sit on one line now
+VERIFY
+--------
+1. Open Home — feed loads as before, nothing should look different
+   initially (first 100 articles show exactly like before)
+2. Scroll to the bottom — if you have more than 100 approved articles,
+   you'll now see a "Load older news" button. Tap it, confirm older
+   articles append below.
+3. Keep tapping until you see "You've reached the end — N articles total"
+   — N should match (or be very close to) your actual total published
+   article count in the admin dashboard's "Total News" tile.
+4. Repeat with a specific category tab (not just Trending) to confirm
+   pagination works per-category too.

@@ -1,32 +1,68 @@
 // src/services/newsService.js
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-  query, where, limit, onSnapshot, serverTimestamp, increment, arrayUnion, arrayRemove
+  query, where, orderBy, startAfter, limit, onSnapshot, serverTimestamp,
+  increment, arrayUnion, arrayRemove
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase'
 
-function sortByCreatedAtDesc(docs) {
-  return docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-}
 function sortByCreatedAtAsc(docs) {
   return docs.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0))
 }
+function sortByCreatedAtDesc(docs) {
+  return docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+}
 
 // ---------- NEWS FEED ----------
-// Always fetches ALL approved news (category-filtered only if set). District
-// filtering/sorting happens client-side in Home.jsx — see that file's
-// sortFeed() for why (avoids Firestore's 30-item `in` query cap and lets
-// "All" always mean literally everything).
+// PAGE_SIZE is how many articles the live listener keeps in real-time sync.
+// This used to be a hard cap (articles beyond it simply never appeared,
+// anywhere — Trending, All, everywhere) — now it's just the first page.
+// loadMoreNews() below fetches older pages on demand, so given enough
+// scrolling every single approved article is reachable, not just the
+// most recent 200.
+//
+// Needs a Firestore composite index on (status, createdAt) and
+// (status, category, createdAt) — see firestore.indexes.json, deployed via
+// `firebase deploy --only firestore:indexes`.
+export const FEED_PAGE_SIZE = 100
+
 export function listenToFeed({ category }, callback, onError) {
   const clauses = [where('status', '==', 'approved')]
   if (category && category !== 'All') clauses.push(where('category', '==', category))
-  const q = query(collection(db, 'news'), ...clauses, limit(200))
+  const q = query(collection(db, 'news'), ...clauses, orderBy('createdAt', 'desc'), limit(FEED_PAGE_SIZE))
   return onSnapshot(
     q,
-    (snap) => callback(sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))),
-    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([]) }
+    (snap) => {
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      const lastDoc = snap.docs[snap.docs.length - 1] || null
+      const hasMore = snap.docs.length === FEED_PAGE_SIZE
+      callback(docs, { lastDoc, hasMore })
+    },
+    (err) => { console.error('listenToFeed failed:', err); onError?.(err); callback([], { lastDoc: null, hasMore: false }) }
   )
+}
+
+// Fetches the NEXT page of older articles, starting right after the last
+// article already loaded. One-time fetch (not live) — appended to whatever
+// the live listener already has. Call this again with the new cursor to
+// keep paging back through the entire archive.
+export async function loadMoreNews({ category, afterDoc }) {
+  if (!afterDoc) return { docs: [], lastDoc: null, hasMore: false }
+  const clauses = [where('status', '==', 'approved')]
+  if (category && category !== 'All') clauses.push(where('category', '==', category))
+  const q = query(
+    collection(db, 'news'),
+    ...clauses,
+    orderBy('createdAt', 'desc'),
+    startAfter(afterDoc),
+    limit(FEED_PAGE_SIZE)
+  )
+  const snap = await getDocs(q)
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const lastDoc = snap.docs[snap.docs.length - 1] || null
+  const hasMore = snap.docs.length === FEED_PAGE_SIZE
+  return { docs, lastDoc, hasMore }
 }
 
 export async function getNewsById(id) {
@@ -39,11 +75,10 @@ export async function incrementViewCount(id) {
 }
 
 export async function searchNews(keyword) {
-  // Client-side fallback — the primary search path is now the searchNewsFn
-  // Cloud Function (see src/pages/Search.jsx), which scans the full corpus.
-  // This function is kept for any place still calling it directly.
+  // Fallback only — primary search is the searchNewsFn Cloud Function
+  // (already scans the full corpus server-side, no cap).
   const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
-  const docs = sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   const lower = keyword.trim().toLowerCase()
   return docs.filter((n) =>
     n.headline?.toLowerCase().includes(lower) ||
@@ -104,10 +139,9 @@ export const POINTS_PER_APPROVED_REPORT = 10
 
 // Approve: copies the draft into the public `news` collection, marks the
 // draft approved, and credits wallet points for own-district journalist
-// reports. The published doc's createdAt uses the ORIGINAL draft submission
-// timestamp (rest.createdAt) rather than a fresh serverTimestamp() at
-// approval time — otherwise a report's recency ranking would depend on how
-// quickly an admin happened to review it, not when it was actually filed.
+// reports. Published doc's createdAt uses the ORIGINAL draft submission
+// timestamp (not approval time) so recency ranking reflects when a report
+// was actually filed, not how quickly it got reviewed.
 export async function approveDraft(draftEntry) {
   const { id, ...rest } = draftEntry
   await addDoc(collection(db, 'news'), {
@@ -230,8 +264,8 @@ export async function publishNewsDirectly(data) {
 }
 
 export async function listAllNews() {
-  const snap = await getDocs(query(collection(db, 'news'), limit(300)))
-  return sortByCreatedAtDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  const snap = await getDocs(query(collection(db, 'news'), orderBy('createdAt', 'desc'), limit(500)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
 export async function updateNews(id, data) {

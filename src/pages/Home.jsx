@@ -1,18 +1,11 @@
 // src/pages/Home.jsx
-// FIX: "Trending" (category = 'All') should show every report from every
-// category, sorted by recency — a newer General item should always rank
-// above an older State Politics item within the same district-priority
-// bucket. If that wasn't happening, the most likely cause is a district
-// string mismatch (extra whitespace, casing) silently sending an item into
-// the wrong sort bucket. isLocalMatch below now normalizes both sides
-// (trim + case-fold) before comparing, so no valid match is ever missed.
 import { useEffect, useState } from 'react'
 import Header from '../components/Header'
 import CategoryTabs from '../components/CategoryTabs'
 import DistrictSelector from '../components/DistrictSelector'
 import { BigNewsCard, CompactNewsCard } from '../components/NewsCard'
 import ReelsFeed from '../components/ReelsFeed'
-import { listenToFeed, updateUserProfile } from '../services/newsService'
+import { listenToFeed, loadMoreNews, updateUserProfile } from '../services/newsService'
 import { useAuth } from '../contexts/AuthContext'
 
 const DISTRICT_KEY = 'nf_selected_district'
@@ -33,9 +26,6 @@ function tsMs(ts) {
   return isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
-// Normalizes a district string for comparison — trims whitespace and
-// lowercases, so "Andhra Pradesh (statewide) " (trailing space from a form
-// field) still matches "Andhra Pradesh (statewide)" exactly.
 function normalize(str) {
   return (str || '').trim().toLowerCase()
 }
@@ -67,11 +57,6 @@ function isLocalMatch(newsDistrict, selectedDistrict, homeDistrict) {
   return false
 }
 
-// Local-district items first (by recency), then every remaining item
-// (also by recency) — regardless of category. "Trending" passes
-// category=null so every category is included in both buckets;
-// picking a specific category (e.g. General) only narrows the pool
-// BEFORE this sort runs, it never changes the sort itself.
 function sortFeed(items, selectedDistrict, homeDistrict) {
   if (!items.length) return items
   const local = items.filter((n) =>  isLocalMatch(n.district, selectedDistrict, homeDistrict))
@@ -89,6 +74,12 @@ export default function Home() {
   const [feedError, setFeedError] = useState('')
   const [reelsIndex, setReelsIndex] = useState(null)
 
+  // Pagination state — tracks the cursor for "load older news" and whether
+  // there's more to fetch. Resets whenever the category filter changes.
+  const [pageCursor, setPageCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   useEffect(() => {
     if (profile?.district && !localStorage.getItem(DISTRICT_KEY)) {
       setDistrict(profile.district)
@@ -98,13 +89,38 @@ export default function Home() {
   useEffect(() => {
     setAllNews(null)
     setFeedError('')
+    setPageCursor(null)
+    setHasMore(false)
     const unsub = listenToFeed(
       { category },
-      (news) => setAllNews(news),
+      (news, meta) => {
+        setAllNews(news)
+        setPageCursor(meta.lastDoc)
+        setHasMore(meta.hasMore)
+      },
       (err) => setFeedError(err.message || 'Could not load news.')
     )
     return unsub
   }, [category])
+
+  async function handleLoadMore() {
+    if (!pageCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const { docs, lastDoc, hasMore: more } = await loadMoreNews({ category, afterDoc: pageCursor })
+      setAllNews((prev) => {
+        const existingIds = new Set(prev.map((n) => n.id))
+        const merged = [...prev, ...docs.filter((n) => !existingIds.has(n.id))]
+        return merged
+      })
+      setPageCursor(lastDoc)
+      setHasMore(more)
+    } catch (err) {
+      setFeedError('Could not load more news: ' + err.message)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   async function handleDistrictSelect(d) {
     setDistrict(d)
@@ -157,6 +173,22 @@ export default function Home() {
             {displayedNews.slice(1).map((n) => (
               <CompactNewsCard key={n.id} news={n} onOpen={openReelsAt} />
             ))}
+
+            {hasMore && (
+              <button
+                className="nf-btn nf-btn-ghost nf-btn-block"
+                disabled={loadingMore}
+                onClick={handleLoadMore}
+                style={{ marginBottom: 20 }}
+              >
+                {loadingMore ? 'Loading…' : 'Load older news'}
+              </button>
+            )}
+            {!hasMore && allNews.length > 0 && (
+              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--nf-ink-faint)', marginBottom: 20 }}>
+                You've reached the end — {allNews.length} article{allNews.length === 1 ? '' : 's'} total
+              </p>
+            )}
           </div>
         )}
       </div>
