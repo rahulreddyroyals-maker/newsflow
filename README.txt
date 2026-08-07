@@ -1,74 +1,80 @@
-NewsFlow v30 — Every article reachable in Trending and All (pagination)
-==========================================================================
+NewsFlow v31 — Auto-pagination, district-aware push notifications
+=====================================================================
 
-THE ACTUAL BUG
------------------
-Category and district filtering were already correct — Trending includes
-every category, "All districts" never hides anything, both confirmed in
-earlier rounds. The real gap: the feed query had a hard cap of 200 articles.
-Once your total published archive passed 200, older approved articles
-simply stopped being fetched at all — not filtered out, never even
-requested from Firestore. That's why "every article" wasn't holding up:
-it wasn't a filtering bug, it was a ceiling.
-
-THE FIX
----------
-Proper pagination instead of a bigger hard cap (which would just hit the
-same wall again later at a higher number):
-  - Feed now loads 100 articles at a time, live-synced for real-time updates
-  - A "Load older news" button appears at the bottom once there's more —
-    tapping it fetches the next 100, and so on, all the way through your
-    entire archive
-  - When you truly reach the end, it says "You've reached the end — N
-    articles total" so you know pagination is complete, not broken
+FILES IN THIS ZIP (both complete, overwrite existing paths)
+------------------------------------------------------------
+src/pages/Home.jsx      — infinite scroll instead of manual "Load more" button
+functions/index.js      — fixed statewide district matching for push notifications
 
 
-FILES IN THIS ZIP (all complete, overwrite existing paths)
---------------------------------------------------------------
-src/services/newsService.js   — paginated listenToFeed + new loadMoreNews()
-src/pages/Home.jsx             — "Load older news" button + pagination state
-firestore.indexes.json         — NEW, required for the ordered queries below
-firebase.json                  — updated to reference the new indexes file
+1. TRENDING SHOWS EVERY ARTICLE, AUTOMATICALLY
+-------------------------------------------------
+Last round added pagination via a manual "Load older news" button. This
+round switches that to auto-loading: an invisible sentinel element near
+the bottom of the list triggers the next page automatically as the reader
+scrolls close to it (IntersectionObserver, starts loading ~400px before
+it's actually visible so it feels seamless, no visible pop-in).
+
+Nothing else about the pagination logic changed — same server-side
+ordering by createdAt, same "You've reached the end — N articles total"
+message when truly done.
 
 
-WHY A NEW INDEXES FILE IS NEEDED
-------------------------------------
-Ordering by date (createdAt) while also filtering by status/category
-requires Firestore composite indexes — this is the same category-index
-limitation noted in earlier rounds, which is exactly why it was avoided
-originally (client-side sorting instead). Real pagination genuinely needs
-server-side ordering though, so this round adds the two specific indexes
-required: (status, createdAt) and (status, category, createdAt).
+2. PUSH NOTIFICATIONS NOW MATCH DISTRICT SCOPE CORRECTLY
+-------------------------------------------------------------
+THE BUG: notifications matched a user's district against the target
+district using an EXACT STRING match. An ad or story targeting "Andhra
+Pradesh (statewide)" only reached users whose profile literally said that
+exact string — missing everyone whose district was set to a specific place
+like "Guntur" or "Vijayawada," even though they're clearly within Andhra
+Pradesh. Same category of bug that was fixed in Home.jsx's sort logic a
+while back, just never applied here too.
+
+THE FIX: getTokensForDistrict now fetches all users with a push token and
+matches each one against the target using the same statewide-aware logic
+Home.jsx already uses — a story/ad targeting "Andhra Pradesh (statewide)"
+now correctly reaches every user whose own district falls anywhere within
+AP's 28 districts, not just literal string matches.
+
+Also switched from a Firestore where() equality query to fetch-then-filter
+in JavaScript — this sidesteps Firestore's 30-value cap on 'in' queries,
+which would've been hit anyway once trying to match against Telangana's
+33 districts.
 
 
-DEPLOY — note the extra step this time
-==========================================
+3. MULTIPLE ADS PER DAY — ALREADY WORKS, NO CHANGE NEEDED
+---------------------------------------------------------------
+Checked createAdvertisement: every "+ New Ad" is a brand new Firestore
+document, no dedup check, no daily cap. Each new ad triggers its own
+separate onAdPublished push round. This already does exactly what you
+asked — confirmed and documented in a comment so it doesn't get
+accidentally restricted later.
+
+
+DEPLOY
+========
   cd D:\newsflow
-  # copy all 4 files from this zip into your project, overwriting existing
+  # copy both files, overwriting existing:
+  #   src/pages/Home.jsx
+  #   functions/index.js
 
   git add .
-  git commit -m "Add pagination so every article is reachable in Trending and All, not capped at 200"
+  git commit -m "Auto-infinite-scroll pagination, fix statewide district matching for push notifications"
   git push
 
-  firebase deploy --only firestore:indexes
-  # ^ this is a NEW step — building composite indexes can take a few
-  #   minutes on Firebase's side after this command returns; the app will
-  #   show a "failed-precondition" error in the console if you skip this
-  #   and try to use the feed before the index finishes building
-
+  firebase deploy --only functions
   npm run build
   firebase deploy --only hosting
 
 
 VERIFY
---------
-1. Open Home — feed loads as before, nothing should look different
-   initially (first 100 articles show exactly like before)
-2. Scroll to the bottom — if you have more than 100 approved articles,
-   you'll now see a "Load older news" button. Tap it, confirm older
-   articles append below.
-3. Keep tapping until you see "You've reached the end — N articles total"
-   — N should match (or be very close to) your actual total published
-   article count in the admin dashboard's "Total News" tile.
-4. Repeat with a specific category tab (not just Trending) to confirm
-   pagination works per-category too.
+========
+1. Scroll down Home past the first ~15-20 items — older articles should
+   keep appearing automatically, no button to tap
+2. Post a test ad targeting "Andhra Pradesh (statewide)" — confirm a
+   push notification reaches a test account whose district is set to a
+   SPECIFIC AP district (e.g. "Guntur"), not just accounts set to the
+   literal "Andhra Pradesh (statewide)" string
+3. Post two separate ads back-to-back same day — confirm both trigger
+   their own notification (check Firebase console → Functions → Logs
+   for onAdPublished firing twice)

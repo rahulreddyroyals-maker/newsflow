@@ -1,7 +1,12 @@
 // functions/index.js
-// Razorpay/Premium removed for now — can be added back later without
-// touching anything else here. What's left needs zero extra setup beyond
-// what's already configured (no Secret Manager, no extra APIs to enable).
+// FIX: getTokensForDistrict previously did an exact string match against
+// each user's district field. An ad/story targeting "Andhra Pradesh
+// (statewide)" therefore only reached users whose profile literally said
+// that exact string — missing everyone whose district was set to a specific
+// place like "Guntur" or "Krishna," even though they're in Andhra Pradesh.
+// Same class of bug fixed in Home.jsx's sort logic previously; now applied
+// here too, so district-targeted push notifications actually reach every
+// user whose own preference falls within that target scope.
 
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { onDocumentCreated } = require('firebase-functions/v2/firestore')
@@ -15,14 +20,50 @@ initializeApp()
 const db = getFirestore()
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUSH NOTIFICATIONS
+// DISTRICT MATCHING — mirrors Home.jsx's isLocalMatch so "which users get
+// notified" and "which stories rank as local" use identical logic.
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function getTokensForDistrict(district) {
-  let q = db.collection('users').where('fcmToken', '!=', null)
-  if (district) q = q.where('district', '==', district)
-  const snap = await q.limit(500).get()
-  return snap.docs.map((d) => d.data().fcmToken).filter(Boolean)
+function normalize(str) { return (str || '').trim().toLowerCase() }
+
+const AP_DISTRICTS = [
+  'Srikakulam','Parvathipuram Manyam','Vizianagaram','Visakhapatnam','Anakapalli',
+  'Alluri Sitharama Raju','Kakinada','East Godavari','Dr. B.R. Ambedkar Konaseema',
+  'West Godavari','Eluru','Krishna','NTR','Guntur','Palnadu','Bapatla',
+  'Prakasam','Markapuram','Nellore','Kurnool','Nandyal','Anantapur',
+  'Sri Sathya Sai','YSR Kadapa','Annamayya','Chittoor','Tirupati','Polavaram'
+].map(normalize)
+const TS_DISTRICTS = [
+  'Hyderabad','Medchal-Malkajgiri','Rangareddy','Vikarabad','Sangareddy',
+  'Siddipet','Medak','Kamareddy','Nizamabad','Jagtial','Rajanna Sircilla',
+  'Karimnagar','Peddapalli','Mancherial','Adilabad','Nirmal',
+  'Komaram Bheem Asifabad','Jayashankar Bhupalpally','Warangal','Hanumakonda',
+  'Jangaon','Mahabubabad','Bhadradri Kothagudem','Khammam','Mulugu',
+  'Suryapet','Nalgonda','Yadadri Bhuvanagiri','Mahabubnagar','Nagarkurnool',
+  'Wanaparthy','Jogulamba Gadwal','Narayanpet'
+].map(normalize)
+
+function districtMatchesTarget(userDistrict, targetDistrict) {
+  const target = normalize(targetDistrict)
+  const user = normalize(userDistrict)
+  if (!target) return true // no target = broadcast to everyone
+  if (user === target) return true
+  if (target === normalize('Andhra Pradesh (statewide)')) return AP_DISTRICTS.includes(user)
+  if (target === normalize('Telangana (statewide)'))       return TS_DISTRICTS.includes(user)
+  return false
+}
+
+// Fetches every user with a push token, then filters in JS against the
+// target district — this replaces the old single Firestore where() equality
+// match. Doing it this way (rather than a Firestore 'in' query) sidesteps
+// the 30-value cap too, since Telangana alone has 33 districts.
+async function getTokensForDistrict(targetDistrict) {
+  const snap = await db.collection('users').where('fcmToken', '!=', null).limit(2000).get()
+  return snap.docs
+    .map((d) => d.data())
+    .filter((u) => districtMatchesTarget(u.district, targetDistrict))
+    .map((u) => u.fcmToken)
+    .filter(Boolean)
 }
 
 async function sendMulticast(tokens, notification, data = {}) {
@@ -66,11 +107,15 @@ exports.onNewsPublished = onDocumentCreated({ document: 'news/{newsId}', region:
   const story = event.data?.data()
   if (!story || story.status !== 'approved') return null
   const newsId = event.params.newsId
-  const tokens = story.district ? await getTokensForDistrict(story.district) : await getTokensForDistrict(null)
+  const tokens = await getTokensForDistrict(story.district || null)
   await sendMulticast(tokens, { title: `📰 ${story.headline || 'Breaking news'}`, body: story.summary || '' }, { url: `https://newsflowshots.web.app/news/${newsId}`, newsId })
   return null
 })
 
+// Fires on EVERY new advertisement document — a business/journalist can
+// post as many separate ads in a day as they like, each one is its own
+// document creation, so each gets its own fresh round of notifications.
+// There's no daily cap or dedup logic here by design.
 exports.onAdPublished = onDocumentCreated({ document: 'advertisements/{adId}', region: 'asia-south1' }, async (event) => {
   const ad = event.data?.data()
   if (!ad) return null
@@ -143,20 +188,3 @@ exports.searchNewsFn = onCall({ region: 'asia-south1' }, async (request) => {
   scored.sort((a, b) => b._score - a._score || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
   return { results: scored.slice(0, 40).map(({ _score, ...rest }) => rest) }
 })
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PREMIUM (Razorpay) — REMOVED FOR NOW
-// ═══════════════════════════════════════════════════════════════════════════
-// When you're ready to bring this back:
-//   1. Enable the Secret Manager API for your project (this is what the
-//      earlier deploy error was about — it's a one-time toggle, not
-//      anything wrong with the code):
-//      console.developers.google.com/apis/api/secretmanager.googleapis.com/overview?project=newsflowshots
-//   2. `npm install razorpay --save` inside functions/
-//   3. Re-add the createPremiumOrder / verifyPremiumPayment functions
-//      (ask and I'll hand them back exactly as before)
-//   4. Set the two secrets: firebase functions:secrets:set RAZORPAY_KEY_ID
-//      and RAZORPAY_KEY_SECRET
-// Until then, src/pages/Premium.jsx will just show an error if someone
-// tries to subscribe — safe to leave the page in place unlinked, or remove
-// the /premium route from App.jsx if you'd rather it not exist at all yet.

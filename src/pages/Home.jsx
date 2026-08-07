@@ -1,5 +1,9 @@
 // src/pages/Home.jsx
-import { useEffect, useState } from 'react'
+// CHANGE: pagination now auto-triggers as the reader scrolls near the
+// bottom (IntersectionObserver on a sentinel element), instead of requiring
+// a manual "Load older news" tap. Feels like every article is simply *in*
+// Trending/All as you scroll, rather than something you have to ask for.
+import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
 import CategoryTabs from '../components/CategoryTabs'
 import DistrictSelector from '../components/DistrictSelector'
@@ -74,11 +78,10 @@ export default function Home() {
   const [feedError, setFeedError] = useState('')
   const [reelsIndex, setReelsIndex] = useState(null)
 
-  // Pagination state — tracks the cursor for "load older news" and whether
-  // there's more to fetch. Resets whenever the category filter changes.
   const [pageCursor, setPageCursor] = useState(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef(null)
 
   useEffect(() => {
     if (profile?.district && !localStorage.getItem(DISTRICT_KEY)) {
@@ -104,14 +107,13 @@ export default function Home() {
   }, [category])
 
   async function handleLoadMore() {
-    if (!pageCursor || loadingMore) return
+    if (!pageCursor || loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
       const { docs, lastDoc, hasMore: more } = await loadMoreNews({ category, afterDoc: pageCursor })
       setAllNews((prev) => {
         const existingIds = new Set(prev.map((n) => n.id))
-        const merged = [...prev, ...docs.filter((n) => !existingIds.has(n.id))]
-        return merged
+        return [...prev, ...docs.filter((n) => !existingIds.has(n.id))]
       })
       setPageCursor(lastDoc)
       setHasMore(more)
@@ -121,6 +123,21 @@ export default function Home() {
       setLoadingMore(false)
     }
   }
+
+  // Auto-fires handleLoadMore when the sentinel (an empty div right after
+  // the last card) scrolls into view — the reader never has to tap
+  // anything, older articles just keep appearing as they scroll.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) handleLoadMore() },
+      { rootMargin: '400px' } // start loading a bit before it's actually visible, so it feels seamless
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, pageCursor, category])
 
   async function handleDistrictSelect(d) {
     setDistrict(d)
@@ -174,15 +191,13 @@ export default function Home() {
               <CompactNewsCard key={n.id} news={n} onOpen={openReelsAt} />
             ))}
 
-            {hasMore && (
-              <button
-                className="nf-btn nf-btn-ghost nf-btn-block"
-                disabled={loadingMore}
-                onClick={handleLoadMore}
-                style={{ marginBottom: 20 }}
-              >
-                {loadingMore ? 'Loading…' : 'Load older news'}
-              </button>
+            {/* Invisible sentinel — triggers auto-loading when scrolled near */}
+            {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
+
+            {loadingMore && (
+              <p style={{ textAlign: 'center', fontSize: 12.5, color: 'var(--nf-ink-faint)', padding: '10px 0' }}>
+                Loading more…
+              </p>
             )}
             {!hasMore && allNews.length > 0 && (
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--nf-ink-faint)', marginBottom: 20 }}>
