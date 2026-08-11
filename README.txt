@@ -1,80 +1,82 @@
-NewsFlow v31 — Auto-pagination, district-aware push notifications
-=====================================================================
+NewsFlow v32 — Per-journalist Groq API keys
+===============================================
 
-FILES IN THIS ZIP (both complete, overwrite existing paths)
+WHAT THIS ACTUALLY GIVES YOU
+--------------------------------
+Not "each journalist has their own Groq account" (unrealistic for citizen
+journalists) — instead: YOU generate multiple keys under your own Groq
+account (console.groq.com/keys lets you create as many as you like), then
+assign one to a specific journalist if you want to:
+  - Track their AI usage separately in Groq's dashboard
+  - Revoke/replace just their access without affecting anyone else
+  - Isolate one journalist hitting a rate limit from blocking others
+
+Any journalist WITHOUT an assigned key automatically uses the shared
+VITE_GROQ_API_KEY, exactly as before — this is fully optional, per journalist.
+
+SECURITY NOTE (same trade-off as the shared key, just now per-person):
+AI calls happen directly from the browser, so whichever key is used is
+visible in that browser's network requests/devtools. A shared key is
+visible to everyone; a personal key is visible to that one journalist
+specifically. Fine for usage tracking and isolating misuse between
+journalists — not a hard security boundary against that journalist seeing
+their own key.
+
+
+FILES IN THIS ZIP (all complete, overwrite existing paths)
 ------------------------------------------------------------
-src/pages/Home.jsx      — infinite scroll instead of manual "Load more" button
-functions/index.js      — fixed statewide district matching for push notifications
+src/services/groq.js               — every function now takes an optional
+                                       trailing apiKeyOverride argument
+src/services/duplicateCheck.js     — passes the override through
+src/journalist/SubmitNews.jsx      — uses profile.groqApiKey when set
+src/journalist/AIDraftPreview.jsx  — same, for translate + duplicate check
+src/admin/ManageJournalists.jsx    — NEW: input field to assign/remove a
+                                       journalist's personal key
+
+No firestore.rules changes needed — groqApiKey was never added to the
+self-editable field list, so it's already admin-only by default.
 
 
-1. TRENDING SHOWS EVERY ARTICLE, AUTOMATICALLY
--------------------------------------------------
-Last round added pagination via a manual "Load older news" button. This
-round switches that to auto-loading: an invisible sentinel element near
-the bottom of the list triggers the next page automatically as the reader
-scrolls close to it (IntersectionObserver, starts loading ~400px before
-it's actually visible so it feels seamless, no visible pop-in).
+HOW TO USE IT
+----------------
+1. Generate a new key at console.groq.com/keys (do this once per
+   journalist you want to isolate — takes a few seconds each)
+2. Admin → Manage Journalists → tap a journalist to expand → scroll to
+   "Personal Groq API key" → paste it in → Save key
+3. That journalist's AI draft generation, voice transcription, translation,
+   and duplicate-check calls now use their assigned key automatically —
+   nothing changes on their end, no UI for them to configure
+4. To go back to the shared key for that journalist: tap "Remove — use
+   shared key"
 
-Nothing else about the pagination logic changed — same server-side
-ordering by createdAt, same "You've reached the end — N articles total"
-message when truly done.
-
-
-2. PUSH NOTIFICATIONS NOW MATCH DISTRICT SCOPE CORRECTLY
--------------------------------------------------------------
-THE BUG: notifications matched a user's district against the target
-district using an EXACT STRING match. An ad or story targeting "Andhra
-Pradesh (statewide)" only reached users whose profile literally said that
-exact string — missing everyone whose district was set to a specific place
-like "Guntur" or "Vijayawada," even though they're clearly within Andhra
-Pradesh. Same category of bug that was fixed in Home.jsx's sort logic a
-while back, just never applied here too.
-
-THE FIX: getTokensForDistrict now fetches all users with a push token and
-matches each one against the target using the same statewide-aware logic
-Home.jsx already uses — a story/ad targeting "Andhra Pradesh (statewide)"
-now correctly reaches every user whose own district falls anywhere within
-AP's 28 districts, not just literal string matches.
-
-Also switched from a Firestore where() equality query to fetch-then-filter
-in JavaScript — this sidesteps Firestore's 30-value cap on 'in' queries,
-which would've been hit anyway once trying to match against Telangana's
-33 districts.
-
-
-3. MULTIPLE ADS PER DAY — ALREADY WORKS, NO CHANGE NEEDED
----------------------------------------------------------------
-Checked createAdvertisement: every "+ New Ad" is a brand new Firestore
-document, no dedup check, no daily cap. Each new ad triggers its own
-separate onAdPublished push round. This already does exactly what you
-asked — confirmed and documented in a comment so it doesn't get
-accidentally restricted later.
+Admin-side actions (Upload News Directly, Advertisements) always use the
+shared key regardless — this feature is specifically for journalist
+submissions.
 
 
 DEPLOY
 ========
   cd D:\newsflow
-  # copy both files, overwriting existing:
-  #   src/pages/Home.jsx
-  #   functions/index.js
+  # copy all 5 files from this zip, overwriting existing
 
   git add .
-  git commit -m "Auto-infinite-scroll pagination, fix statewide district matching for push notifications"
+  git commit -m "Add optional per-journalist Groq API keys for usage tracking/isolation"
   git push
 
-  firebase deploy --only functions
   npm run build
   firebase deploy --only hosting
+
+(No Cloud Functions or Firestore rules changes this round — pure frontend.)
 
 
 VERIFY
 ========
-1. Scroll down Home past the first ~15-20 items — older articles should
-   keep appearing automatically, no button to tap
-2. Post a test ad targeting "Andhra Pradesh (statewide)" — confirm a
-   push notification reaches a test account whose district is set to a
-   SPECIFIC AP district (e.g. "Guntur"), not just accounts set to the
-   literal "Andhra Pradesh (statewide)" string
-3. Post two separate ads back-to-back same day — confirm both trigger
-   their own notification (check Firebase console → Functions → Logs
-   for onAdPublished firing twice)
+1. Admin → Manage Journalists → expand a journalist → confirm the new
+   "Personal Groq API key" field appears
+2. Assign a test key, save, confirm the "Own key" badge appears next to
+   their name in the collapsed list view
+3. Log in as that journalist → Submit News → Generate AI Draft → confirm
+   it works normally (uses their key behind the scenes, no visible
+   difference in the UI)
+4. Check console.groq.com's usage dashboard for that specific key — should
+   show requests only from that journalist's activity

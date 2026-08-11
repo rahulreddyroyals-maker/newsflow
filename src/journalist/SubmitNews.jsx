@@ -23,16 +23,19 @@ export default function SubmitNews() {
   const [error, setError] = useState('')
   const [showNameThisPost, setShowNameThisPost] = useState(profile?.displayNamePublicly !== false)
 
-  // Filled either by "Generate AI Draft" or typed by hand below — AI failing
-  // (wrong/expired key, network issue, etc.) no longer blocks submission;
-  // the journalist can always just type these three fields themselves and
-  // continue, the same way the admin's Upload News page already works.
+  // Filled either by "Generate AI Draft" or typed by hand — AI failing
+  // (wrong/expired key, network issue, etc.) never blocks submission.
   const [headline, setHeadline] = useState('')
   const [summary, setSummary] = useState('')
   const [article, setArticle] = useState('')
 
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
+
+  // If an admin has assigned this journalist a personal Groq key (for usage
+  // tracking / rate-limit isolation), use it — otherwise every AI call
+  // below falls back to the shared key automatically.
+  const journalistGroqKey = profile?.groqApiKey || undefined
 
   if (profile?.suspended) {
     return (
@@ -88,10 +91,8 @@ export default function SubmitNews() {
     setVideoFile(file)
   }
 
-  // Assistive only now — fills the headline/summary/article fields below on
-  // success, but never blocks the journalist from typing those by hand
-  // instead if this fails (wrong API key, network issue, etc.) or they'd
-  // simply rather write it themselves.
+  // Assistive only — fills headline/summary/article on success, never
+  // blocks the journalist from typing those by hand instead.
   async function handleGenerateDraft() {
     setError('')
     if (!category || !district) return setError('Please select category and district first.')
@@ -104,7 +105,7 @@ export default function SubmitNews() {
       if (audioBlob) {
         setBusyLabel('Transcribing voice note…')
         try {
-          const transcript = await transcribeVoiceNote(audioBlob, profile?.language === 'en' ? 'en' : 'te')
+          const transcript = await transcribeVoiceNote(audioBlob, profile?.language === 'en' ? 'en' : 'te', journalistGroqKey)
           rawText = [rawText, transcript].filter(Boolean).join('\n\n')
         } catch (err) {
           if (!rawText) {
@@ -116,7 +117,7 @@ export default function SubmitNews() {
 
       setBusyLabel('Writing AI draft…')
       const language = profile?.language === 'en' ? 'English' : 'Telugu'
-      const draft = await generateNewsDraft({ rawText, language, category, district })
+      const draft = await generateNewsDraft({ rawText, language, category, district }, journalistGroqKey)
       setHeadline(draft.headline || '')
       setSummary(draft.summary || '')
       setArticle(draft.article || '')

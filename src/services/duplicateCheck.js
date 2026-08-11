@@ -3,7 +3,9 @@ import { collection, getDocs, query, where, orderBy, limit } from 'firebase/fire
 import { db } from './firebase'
 import { checkDuplicate } from './groq'
 
-export async function findPossibleDuplicate({ headline, summary, district, category }) {
+// apiKeyOverride: pass the journalist's personal Groq key (profile.groqApiKey)
+// if they have one assigned; omit to use the shared key.
+export async function findPossibleDuplicate({ headline, summary, district, category }, apiKeyOverride) {
   const candidateText = `${headline}\n${summary}`
 
   const [newsSnap, draftsSnap] = await Promise.all([
@@ -31,7 +33,7 @@ export async function findPossibleDuplicate({ headline, summary, district, categ
   if (recentItems.length === 0) return { isDuplicate: false }
 
   const recentTexts = recentItems.map((n) => `${n.headline}\n${n.summary}`)
-  const result = await checkDuplicate(candidateText, recentTexts)
+  const result = await checkDuplicate(candidateText, recentTexts, apiKeyOverride)
 
   if (result.isDuplicate && result.matchIndex >= 0 && result.matchIndex < recentItems.length) {
     return {

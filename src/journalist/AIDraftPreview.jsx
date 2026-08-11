@@ -18,8 +18,8 @@ export default function AIDraftPreview() {
   const [dupWarning, setDupWarning] = useState(null)
   const [checkingDup, setCheckingDup] = useState(false)
 
-  // Runs once in the background as soon as the draft loads — never blocks
-  // reading/editing while it checks.
+  const journalistGroqKey = profile?.groqApiKey || undefined
+
   useEffect(() => {
     if (!draft?.headline) return
     setCheckingDup(true)
@@ -28,7 +28,7 @@ export default function AIDraftPreview() {
       summary: draft.summary,
       district: draft.district,
       category: draft.category
-    }).then((result) => {
+    }, journalistGroqKey).then((result) => {
       setDupWarning(result.isDuplicate ? result : null)
       setCheckingDup(false)
     }).catch(() => setCheckingDup(false))
@@ -53,7 +53,7 @@ export default function AIDraftPreview() {
     setError('')
     try {
       const targetLang = draft.language === 'en' ? 'Telugu' : 'English'
-      const translated = await translateDraft(draft, targetLang)
+      const translated = await translateDraft(draft, targetLang, journalistGroqKey)
       if (draft.language === 'en') {
         updateField('headlineTe', translated.headline)
       } else {
@@ -75,10 +75,6 @@ export default function AIDraftPreview() {
     setBusy(true)
     setError('')
 
-    // Defensive check matching the Firestore rule — a mismatch here means
-    // the draft's district doesn't match the journalist's own registered
-    // district, which the rules will reject anyway. Catching it here gives
-    // a clear, specific reason instead of a generic permission error.
     const draftDistrict = (draft.district || '').trim()
     const profileDistrict = (profile?.district || '').trim()
     if (draftDistrict !== profileDistrict) {
