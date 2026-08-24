@@ -2,12 +2,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage, uploadVideo } from '../services/newsService'
+import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage, uploadVideo, logAuditEvent } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 import { Events } from '../services/analytics'
 
 export default function Approvals() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
   const navigate = useNavigate()
   const [drafts, setDrafts] = useState(null)
   const [busyId, setBusyId] = useState(null)
@@ -65,7 +65,15 @@ export default function Approvals() {
     setBusyId(d.id)
     const toApprove = editingId === d.id ? { ...d, ...edits } : d
     if (editingId === d.id) await updateDraft(d.id, edits)
-    await approveDraft(toApprove)
+    const newsId = await approveDraft(toApprove)
+    await logAuditEvent({
+      action: 'approve',
+      newsId,
+      headline: toApprove.headline,
+      performedBy: user?.uid,
+      performedByName: profile?.name || 'Admin',
+      details: `Submitted by ${d.authorName || d.sourceName || 'unknown'}`
+    })
     Events.approveReport(d.district, d.category)
     setBusyId(null)
     setEditingId(null)
@@ -75,6 +83,14 @@ export default function Approvals() {
     const reason = window.prompt('Reason for rejection (shown to journalist):') || ''
     setBusyId(d.id)
     await rejectDraft(d.id, reason)
+    await logAuditEvent({
+      action: 'reject',
+      newsId: d.id,
+      headline: d.headline,
+      performedBy: user?.uid,
+      performedByName: profile?.name || 'Admin',
+      details: reason || '(no reason given)'
+    })
     setBusyId(null)
   }
 
@@ -125,7 +141,6 @@ export default function Approvals() {
                 </>
               )}
 
-              {/* Duplicate warning — flagged when the journalist submitted, shown here regardless of edit mode */}
               {d.possibleDuplicate && (
                 <div style={{ background: '#FFF1DD', borderRadius: 8, padding: 10, margin: '8px 0' }}>
                   <p style={{ fontSize: 11.5, color: 'var(--nf-warning)', fontWeight: 700 }}>

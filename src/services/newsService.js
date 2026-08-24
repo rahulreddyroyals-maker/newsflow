@@ -15,16 +15,6 @@ function sortByCreatedAtDesc(docs) {
 }
 
 // ---------- NEWS FEED ----------
-// PAGE_SIZE is how many articles the live listener keeps in real-time sync.
-// This used to be a hard cap (articles beyond it simply never appeared,
-// anywhere — Trending, All, everywhere) — now it's just the first page.
-// loadMoreNews() below fetches older pages on demand, so given enough
-// scrolling every single approved article is reachable, not just the
-// most recent 200.
-//
-// Needs a Firestore composite index on (status, createdAt) and
-// (status, category, createdAt) — see firestore.indexes.json, deployed via
-// `firebase deploy --only firestore:indexes`.
 export const FEED_PAGE_SIZE = 100
 
 export function listenToFeed({ category }, callback, onError) {
@@ -43,10 +33,6 @@ export function listenToFeed({ category }, callback, onError) {
   )
 }
 
-// Fetches the NEXT page of older articles, starting right after the last
-// article already loaded. One-time fetch (not live) — appended to whatever
-// the live listener already has. Call this again with the new cursor to
-// keep paging back through the entire archive.
 export async function loadMoreNews({ category, afterDoc }) {
   if (!afterDoc) return { docs: [], lastDoc: null, hasMore: false }
   const clauses = [where('status', '==', 'approved')]
@@ -75,8 +61,6 @@ export async function incrementViewCount(id) {
 }
 
 export async function searchNews(keyword) {
-  // Fallback only — primary search is the searchNewsFn Cloud Function
-  // (already scans the full corpus server-side, no cap).
   const snap = await getDocs(query(collection(db, 'news'), where('status', '==', 'approved'), limit(200)))
   const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   const lower = keyword.trim().toLowerCase()
@@ -137,14 +121,9 @@ export async function updateDraft(id, data) {
 
 export const POINTS_PER_APPROVED_REPORT = 10
 
-// Approve: copies the draft into the public `news` collection, marks the
-// draft approved, and credits wallet points for own-district journalist
-// reports. Published doc's createdAt uses the ORIGINAL draft submission
-// timestamp (not approval time) so recency ranking reflects when a report
-// was actually filed, not how quickly it got reviewed.
 export async function approveDraft(draftEntry) {
   const { id, ...rest } = draftEntry
-  await addDoc(collection(db, 'news'), {
+  const ref = await addDoc(collection(db, 'news'), {
     headline: rest.headline,
     headlineEn: rest.headlineEn || '',
     summary: rest.summary,
@@ -174,6 +153,7 @@ export async function approveDraft(draftEntry) {
       })
     }
   }
+  return ref.id
 }
 
 export async function rejectDraft(id, reason) {
@@ -274,6 +254,33 @@ export async function updateNews(id, data) {
 
 export async function deleteNews(id) {
   await deleteDoc(doc(db, 'news', id))
+}
+
+// ---------- AUDIT LOG ----------
+// Records who approved/edited/hid/republished/deleted/rejected a news item.
+// Called explicitly from each admin action site (not automatically inside
+// updateNews/deleteNews, since those are generic — the caller knows the
+// actual intent behind a given updateDoc call).
+export async function logAuditEvent({ action, newsId, headline, performedBy, performedByName, details }) {
+  try {
+    await addDoc(collection(db, 'auditLogs'), {
+      action,       // 'approve' | 'reject' | 'edit' | 'hide' | 'republish' | 'delete'
+      newsId: newsId || null,
+      headline: headline || '',
+      performedBy: performedBy || null,
+      performedByName: performedByName || 'Unknown admin',
+      details: details || '',
+      createdAt: serverTimestamp()
+    })
+  } catch (err) {
+    // Never let audit logging failure block the actual admin action.
+    console.error('Failed to write audit log:', err)
+  }
+}
+
+export async function listAuditLogs(limitCount = 200) {
+  const snap = await getDocs(query(collection(db, 'auditLogs'), orderBy('createdAt', 'desc'), limit(limitCount)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
 // ---------- LIKES / DISLIKES ----------

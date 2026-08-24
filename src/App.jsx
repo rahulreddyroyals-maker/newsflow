@@ -32,6 +32,7 @@ import Advertisements from './admin/Advertisements'
 import ManageAdmins from './admin/ManageAdmins'
 import ErrorLogs from './admin/ErrorLogs'
 import ManageClassifieds from './admin/ManageClassifieds'
+import AuditLogs from './admin/AuditLogs'
 
 function JournalistArea() {
   const { isJournalist } = useAuth()
@@ -56,9 +57,6 @@ function AppRoutes() {
         <Route path="/bookmarks" element={<Bookmarks />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/classifieds" element={<Classifieds />} />
-        {/* /premium route removed for now — Razorpay backend isn't deployed.
-            Re-add <Route path="/premium" element={<Premium />} /> (and the
-            import) once Razorpay is set up again. */}
 
         <Route path="/journalist" element={<JournalistArea />} />
         <Route path="/journalist/submit" element={<SubmitNews />} />
@@ -75,6 +73,7 @@ function AppRoutes() {
         <Route path="/admin/manage-admins" element={<ManageAdmins />} />
         <Route path="/admin/error-logs" element={<ErrorLogs />} />
         <Route path="/admin/manage-classifieds" element={<ManageClassifieds />} />
+        <Route path="/admin/audit-logs" element={<AuditLogs />} />
 
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>

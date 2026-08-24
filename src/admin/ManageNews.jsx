@@ -2,11 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listAllNews, updateNews, deleteNews, uploadImage, uploadVideo } from '../services/newsService'
+import { listAllNews, updateNews, deleteNews, uploadImage, uploadVideo, logAuditEvent } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 
 export default function ManageNews() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
   const navigate = useNavigate()
   const [items, setItems] = useState(null)
   const [editingId, setEditingId] = useState(null)
@@ -51,6 +51,14 @@ export default function ManageNews() {
   async function saveEdit(item) {
     setBusyId(item.id)
     await updateNews(item.id, edits)
+    await logAuditEvent({
+      action: 'edit',
+      newsId: item.id,
+      headline: edits.headline,
+      performedBy: user?.uid,
+      performedByName: profile?.name || 'Admin',
+      details: 'Edited from Manage Published News'
+    })
     setItems((list) => list.map((n) => n.id === item.id ? { ...n, ...edits } : n))
     setBusyId(null)
     setEditingId(null)
@@ -60,16 +68,30 @@ export default function ManageNews() {
     if (!window.confirm('Remove this story from the live feed? This cannot be undone.')) return
     setBusyId(item.id)
     await deleteNews(item.id)
+    await logAuditEvent({
+      action: 'delete',
+      newsId: item.id,
+      headline: item.headline,
+      performedBy: user?.uid,
+      performedByName: profile?.name || 'Admin',
+      details: 'Deleted from Manage Published News'
+    })
     setItems((list) => list.filter((n) => n.id !== item.id))
     setBusyId(null)
   }
 
-  // Hide = set status to 'hidden' (removed from reader feed but not deleted)
-  // Republish = set status back to 'approved'
   async function toggleHide(item) {
     const newStatus = item.status === 'hidden' ? 'approved' : 'hidden'
     setBusyId(item.id)
     await updateNews(item.id, { status: newStatus })
+    await logAuditEvent({
+      action: newStatus === 'hidden' ? 'hide' : 'republish',
+      newsId: item.id,
+      headline: item.headline,
+      performedBy: user?.uid,
+      performedByName: profile?.name || 'Admin',
+      details: 'From Manage Published News'
+    })
     setItems((list) => list.map((n) => n.id === item.id ? { ...n, status: newStatus } : n))
     setBusyId(null)
   }

@@ -1,82 +1,94 @@
-NewsFlow v32 — Per-journalist Groq API keys
-===============================================
+NewsFlow v33 — Inline admin controls in the feed + full audit log
+=====================================================================
 
-WHAT THIS ACTUALLY GIVES YOU
+Every file below is COMPLETE and overwrite-ready. No patches to decode.
+
+
+FILES IN THIS ZIP (9 total)
+------------------------------
+firestore.rules                        — auditLogs collection added
+src/services/newsService.js            — logAuditEvent() + listAuditLogs()
+src/components/AdminQuickEditModal.jsx — NEW: inline edit sheet
+src/components/NewsCard.jsx            — admin ⋮ menu on every card
+src/admin/AuditLogs.jsx                — NEW: the audit trail viewer
+src/admin/Approvals.jsx                — logs approve/reject
+src/admin/ManageNews.jsx               — logs edit/hide/republish/delete
+src/App.jsx                            — added /admin/audit-logs route
+src/admin/Dashboard.jsx                — added "📋 Audit Log" button
+
+
+1. INLINE ADMIN CONTROLS — RIGHT IN THE FEED
+-------------------------------------------------
+Every news card (Home feed, Search results, Bookmarks, journalist public
+profiles — anywhere BigNewsCard/CompactNewsCard is used) now shows a small
+"⋮" button in the corner, visible ONLY to logged-in admins. Tapping it opens:
+
+  ✎ Edit       — opens a bottom-sheet with headline/summary/content/
+                  category/district editable right there, no navigation away
+  🚫 Hide       — instantly removes it from the reader feed (toggle to
+                  ↻ Republish once hidden)
+  🗑 Delete     — confirms, then permanently removes it
+
+This means admin can just scroll their normal Home feed like anyone else,
+and the moment something needs fixing, fix it on the spot — no detour
+through a separate Manage News screen (though that screen still exists too,
+for bulk review).
+
+A small "HIDDEN" badge appears on any card an admin has hidden, so it's
+visually obvious if you're looking at something readers can't currently see.
+
+
+2. AUDIT LOG — WHO DID WHAT
 --------------------------------
-Not "each journalist has their own Groq account" (unrealistic for citizen
-journalists) — instead: YOU generate multiple keys under your own Groq
-account (console.groq.com/keys lets you create as many as you like), then
-assign one to a specific journalist if you want to:
-  - Track their AI usage separately in Groq's dashboard
-  - Revoke/replace just their access without affecting anyone else
-  - Isolate one journalist hitting a rate limit from blocking others
+New collection `auditLogs` records six action types:
+  approve · reject · edit · hide · republish · delete
 
-Any journalist WITHOUT an assigned key automatically uses the shared
-VITE_GROQ_API_KEY, exactly as before — this is fully optional, per journalist.
+Every entry captures: what action, which article (by headline, in case the
+article is later deleted), who did it, when, and a short details note
+(e.g. rejection reason, or "from feed quick actions" vs "from Manage News").
 
-SECURITY NOTE (same trade-off as the shared key, just now per-person):
-AI calls happen directly from the browser, so whichever key is used is
-visible in that browser's network requests/devtools. A shared key is
-visible to everyone; a personal key is visible to that one journalist
-specifically. Fine for usage tracking and isolating misuse between
-journalists — not a hard security boundary against that journalist seeing
-their own key.
+Logged from every relevant action site:
+  - Approvals.jsx     → approve, reject
+  - ManageNews.jsx     → edit, hide, republish, delete
+  - NewsCard's inline quick actions → edit, hide, republish, delete
+  - AdminQuickEditModal → edit
 
+View it at Admin → 📋 Audit Log — filterable by action type, newest first.
 
-FILES IN THIS ZIP (all complete, overwrite existing paths)
-------------------------------------------------------------
-src/services/groq.js               — every function now takes an optional
-                                       trailing apiKeyOverride argument
-src/services/duplicateCheck.js     — passes the override through
-src/journalist/SubmitNews.jsx      — uses profile.groqApiKey when set
-src/journalist/AIDraftPreview.jsx  — same, for translate + duplicate check
-src/admin/ManageJournalists.jsx    — NEW: input field to assign/remove a
-                                       journalist's personal key
-
-No firestore.rules changes needed — groqApiKey was never added to the
-self-editable field list, so it's already admin-only by default.
-
-
-HOW TO USE IT
-----------------
-1. Generate a new key at console.groq.com/keys (do this once per
-   journalist you want to isolate — takes a few seconds each)
-2. Admin → Manage Journalists → tap a journalist to expand → scroll to
-   "Personal Groq API key" → paste it in → Save key
-3. That journalist's AI draft generation, voice transcription, translation,
-   and duplicate-check calls now use their assigned key automatically —
-   nothing changes on their end, no UI for them to configure
-4. To go back to the shared key for that journalist: tap "Remove — use
-   shared key"
-
-Admin-side actions (Upload News Directly, Advertisements) always use the
-shared key regardless — this feature is specifically for journalist
-submissions.
+IMPORTANT: audit log entries are write-once. The Firestore rules make them
+uneditable and undeletable by anyone, including admins — so the trail can't
+be quietly altered after the fact. If you ever need to purge old entries,
+that has to be done manually via the Firebase console, by design.
 
 
 DEPLOY
 ========
   cd D:\newsflow
-  # copy all 5 files from this zip, overwriting existing
+  # copy all 9 files from this zip, overwriting existing
 
   git add .
-  git commit -m "Add optional per-journalist Groq API keys for usage tracking/isolation"
+  git commit -m "Add inline admin edit/hide/delete on every feed card, full audit log of approve/edit/hide/delete actions"
   git push
 
+  firebase deploy --only firestore:rules
   npm run build
   firebase deploy --only hosting
 
-(No Cloud Functions or Firestore rules changes this round — pure frontend.)
+(No new Cloud Functions or indexes this round — the audit log query just
+orders by createdAt on its own collection, no composite index needed since
+there's no additional where() filter alongside it.)
 
 
 VERIFY
 ========
-1. Admin → Manage Journalists → expand a journalist → confirm the new
-   "Personal Groq API key" field appears
-2. Assign a test key, save, confirm the "Own key" badge appears next to
-   their name in the collapsed list view
-3. Log in as that journalist → Submit News → Generate AI Draft → confirm
-   it works normally (uses their key behind the scenes, no visible
-   difference in the UI)
-4. Check console.groq.com's usage dashboard for that specific key — should
-   show requests only from that journalist's activity
+1. Log in as admin, open Home — you should see a small "⋮" in the corner
+   of every card now
+2. Tap it on any card → Edit → change the headline → Save → confirm the
+   card updates immediately in the feed without a page reload
+3. Tap ⋮ → Hide on a different card → confirm it shows a "HIDDEN" badge
+   and log out (or open in an incognito window) to confirm readers no
+   longer see it
+4. Admin → 📋 Audit Log → confirm both actions above appear, correctly
+   labeled, with your name and a timestamp
+5. Approve a pending journalist report → check Audit Log again → confirm
+   an "Approved" entry appears automatically

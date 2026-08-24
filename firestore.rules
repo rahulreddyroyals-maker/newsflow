@@ -2,8 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Safe helpers — use .get(key, default) everywhere so missing fields
-    // on older user docs don't throw and silently deny everything.
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function myProfile() {
@@ -56,6 +54,16 @@ service cloud.firestore {
       allow create: if true;
       allow read, delete: if isAdmin();
       allow update: if false;
+    }
+
+    // ── Audit logs ────────────────────────────────────────────────────────────
+    // Records who approved/edited/hid/republished/deleted a news item.
+    // Write-once, admin-only — never editable, never deletable by anyone
+    // (including admins) so the trail can't be quietly altered after the fact.
+    match /auditLogs/{logId} {
+      allow create: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     // ── Categories / Districts (static reference) ─────────────────────────────

@@ -37,6 +37,7 @@ export default function AdminDashboard() {
     { label: '📢 Local Ad Leads', variant: 'nf-btn-ghost', path: '/admin/ad-leads' },
     { label: '💰 Withdrawal Requests', variant: 'nf-btn-ghost', path: '/admin/withdrawals' },
     { label: '👥 Manage Admins', variant: 'nf-btn-ghost', path: '/admin/manage-admins' },
+    { label: '📋 Audit Log', variant: 'nf-btn-ghost', path: '/admin/audit-logs' },
     { label: '🐛 Error Logs', variant: 'nf-btn-ghost', path: '/admin/error-logs' },
     { label: 'Manage Journalists', variant: 'nf-btn-ghost', path: '/admin/journalists' }
   ]
