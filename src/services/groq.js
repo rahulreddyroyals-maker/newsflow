@@ -3,25 +3,21 @@
 // professional rewriting, headline/summary generation, translation, and
 // duplicate-similarity checks.
 //
-// PER-JOURNALIST KEYS: every exported function now accepts an optional
-// trailing `apiKeyOverride` argument. Pass a journalist's individually
-// assigned key (profile.groqApiKey) when calling on their behalf; omit it
-// (or pass undefined/null) to fall back to the shared VITE_GROQ_API_KEY —
-// used for admin actions, RSS ingestion, and any journalist who hasn't
-// been assigned a personal key yet. Nothing breaks for existing call sites
-// that don't pass this — it's purely additive.
+// MODEL UPDATE (this round): llama-3.3-70b-versatile was retired by Groq on
+// June 17, 2026 — it now returns a 404 "model_not_found" error, which is
+// what caused the RSS feed failure. Switched to openai/gpt-oss-120b, which
+// Groq's own documentation lists as the direct replacement for this exact
+// model. TRANSCRIBE_MODEL (whisper-large-v3) is unaffected — not on Groq's
+// deprecation list.
 //
-// ⚠️ Same trade-off as before: these calls happen directly from the browser,
-// so whichever key is used is visible in that browser's network requests /
-// devtools. A shared key is visible to everyone; a per-journalist key is
-// visible to that journalist specifically. Fine for cost attribution and
-// isolating one journalist's usage from another's; not a hard security
-// boundary. Before a public launch at scale, move these calls behind a
-// small backend (Cloud Function) so no key reaches the client at all.
+// PER-JOURNALIST KEYS: every exported function accepts an optional trailing
+// `apiKeyOverride` argument. Pass a journalist's individually assigned key
+// (profile.groqApiKey) when calling on their behalf; omit it to fall back
+// to the shared VITE_GROQ_API_KEY.
 
 const DEFAULT_GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
 const GROQ_BASE = 'https://api.groq.com/openai/v1'
-const TEXT_MODEL = 'llama-3.3-70b-versatile'
+const TEXT_MODEL = 'openai/gpt-oss-120b'
 const TRANSCRIBE_MODEL = 'whisper-large-v3'
 
 function resolveKey(apiKeyOverride) {
@@ -52,6 +48,9 @@ async function groqChat(systemPrompt, userPrompt, apiKeyOverride) {
     const errText = await res.text()
     if (res.status === 401) {
       throw new Error(`Groq rejected this API key as invalid (401). If this journalist has a personal key assigned, check it in Manage Journalists — otherwise the shared VITE_GROQ_API_KEY needs updating. Raw response: ${errText}`)
+    }
+    if (res.status === 404) {
+      throw new Error(`Groq says the model "${TEXT_MODEL}" doesn't exist or isn't available (404) — Groq may have retired/renamed it again. Check console.groq.com/docs/models for the current list and update TEXT_MODEL in src/services/groq.js. Raw response: ${errText}`)
     }
     throw new Error(`Groq request failed (${res.status}): ${errText}`)
   }
