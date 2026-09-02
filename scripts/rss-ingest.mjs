@@ -1,7 +1,10 @@
 // scripts/rss-ingest.mjs
 // Runs as a GitHub Actions cron job every 30 minutes.
-// KEY FIX: now rejects any RSS item older than 24 hours — prevents old
-// archived stories from flooding the pending-approval queue on every run.
+//
+// MODEL UPDATE (this round): llama-3.3-70b-versatile was retired by Groq on
+// June 17, 2026 (returns a 404 model_not_found) — this is exactly what broke
+// the RSS feed. Switched to openai/gpt-oss-120b, Groq's documented direct
+// replacement for this model.
 import Parser from 'rss-parser'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
@@ -10,9 +13,10 @@ import { RSS_FEEDS, NEWSDATA_QUERY } from './feeds.config.mjs'
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY
+const GROQ_TEXT_MODEL = 'openai/gpt-oss-120b'
 const MAX_ITEMS_PER_FEED = 12
-const MAX_ITEM_AGE_HOURS = 24   // ← reject anything older than this
-const DEDUP_LOOKBACK_DAYS = 7   // ← still check last 7 days for duplicates
+const MAX_ITEM_AGE_HOURS = 24
+const DEDUP_LOOKBACK_DAYS = 7
 
 if (!SERVICE_ACCOUNT_JSON) {
   console.error('Missing FIREBASE_SERVICE_ACCOUNT env var.')
@@ -38,7 +42,7 @@ async function groqChat(systemPrompt, userPrompt) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_TEXT_MODEL,
       temperature: 0.3,
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }]
     })
@@ -46,6 +50,7 @@ async function groqChat(systemPrompt, userPrompt) {
   if (!res.ok) {
     const t = await res.text()
     if (res.status === 401) throw new Error(`Groq 401 — invalid API key. Update GROQ_API_KEY secret. Raw: ${t}`)
+    if (res.status === 404) throw new Error(`Groq 404 — model "${GROQ_TEXT_MODEL}" not found. Groq may have retired it again; check console.groq.com/docs/models and update GROQ_TEXT_MODEL in scripts/rss-ingest.mjs. Raw: ${t}`)
     throw new Error(`Groq ${res.status}: ${t}`)
   }
   return (await res.json()).choices?.[0]?.message?.content?.trim() || ''
@@ -89,7 +94,7 @@ const CATEGORY_IDS = [
 // ── Age check ─────────────────────────────────────────────────────────────────
 function itemIsRecent(item) {
   const raw = item.pubDate || item.isoDate || item.date
-  if (!raw) return true // can't determine age → accept
+  if (!raw) return true
   const pubMs = new Date(raw).getTime()
   if (isNaN(pubMs)) return true
   const ageHours = (Date.now() - pubMs) / 3_600_000
