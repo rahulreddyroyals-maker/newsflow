@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listenToPendingDrafts, approveDraft, rejectDraft, updateDraft, uploadImage, uploadVideo, logAuditEvent } from '../services/newsService'
+import { listenToPendingDrafts, approveDraft, rejectDraft, rejectDraftsBulk, updateDraft, uploadImage, uploadVideo, logAuditEvent } from '../services/newsService'
 import { validateVideoFile, MAX_VIDEO_SECONDS } from '../utils/video'
 import { Events } from '../services/analytics'
 
@@ -16,6 +16,8 @@ export default function Approvals() {
   const [edits, setEdits] = useState({})
   const [videoError, setVideoError] = useState('')
   const [error, setError] = useState('')
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   useEffect(() => {
     if (!isAdmin) return
@@ -26,6 +28,41 @@ export default function Approvals() {
   if (!isAdmin) {
     return <div className="nf-screen" style={{ alignItems: 'center', justifyContent: 'center' }}><p>Admins only</p></div>
   }
+
+  function toggleSelect(id) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const allSelected = !!drafts?.length && drafts.every((d) => selected.has(d.id))
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set((drafts || []).map((d) => d.id)))
+  }
+
+  async function runBulkReject(list, label) {
+    if (!list.length || bulkBusy) return
+    if (!window.confirm(`Reject ${label} (${list.length} post${list.length > 1 ? 's' : ''})? This cannot be undone.`)) return
+    const reason = window.prompt('Reason for rejection (optional, applied to all):') || ''
+    setBulkBusy(true)
+    try {
+      await rejectDraftsBulk(
+        list.map((d) => ({ id: d.id, headline: d.headline })),
+        reason,
+        { uid: user?.uid, name: profile?.name || 'Admin' }
+      )
+      setSelected(new Set())
+    } catch (err) {
+      setError(err.message || 'Bulk reject failed.')
+    }
+    setBulkBusy(false)
+  }
+
+  const rejectSelected = () => runBulkReject((drafts || []).filter((d) => selected.has(d.id)), 'selected')
+  const rejectAll = () => runBulkReject(drafts || [], 'ALL pending')
+  const rejectAllRss = () => runBulkReject((drafts || []).filter((d) => d.authorId === 'system-rss' || d.sourceName), 'all RSS / news-feed')
 
   function startEdit(d) {
     setEditingId(d.id)
@@ -109,6 +146,29 @@ export default function Approvals() {
           </div>
         )}
         {!error && drafts === null && <p style={{ color: 'var(--nf-ink-soft)' }}>Loading…</p>}
+        {drafts?.length > 0 && (
+          <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--nf-paper)', padding: '8px 0 10px', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700 }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+                Select all ({drafts.length})
+              </label>
+              {selected.size > 0 && (
+                <button className="nf-btn nf-btn-ghost" style={{ color: 'var(--nf-danger)', padding: '6px 12px' }} disabled={bulkBusy} onClick={rejectSelected}>
+                  {bulkBusy ? 'Rejecting…' : `✕ Reject selected (${selected.size})`}
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <button className="nf-btn nf-btn-ghost" style={{ color: 'var(--nf-danger)', padding: '6px 12px' }} disabled={bulkBusy} onClick={rejectAllRss}>
+                Reject all RSS / feed items
+              </button>
+              <button className="nf-btn nf-btn-ghost" style={{ color: 'var(--nf-danger)', padding: '6px 12px' }} disabled={bulkBusy} onClick={rejectAll}>
+                Reject ALL pending
+              </button>
+            </div>
+          </div>
+        )}
         {!error && drafts?.length === 0 && (
           <div className="nf-empty">
             <p style={{ fontWeight: 700, color: 'var(--nf-navy)' }}>All caught up</p>
@@ -119,7 +179,10 @@ export default function Approvals() {
           const expanded = expandedId === d.id
           const editing = editingId === d.id
           return (
-            <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 12 }}>
+            <div key={d.id} className="nf-card" style={{ padding: 14, marginBottom: 12, outline: selected.has(d.id) ? '2px solid var(--nf-blue)' : 'none' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 8, color: 'var(--nf-ink-soft)' }}>
+                <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /> Select
+              </label>
               {d.images?.[0] && !editing && <img src={d.images[0]} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
               {d.videoUrl && !editing && <video controls src={d.videoUrl} style={{ width: '100%', maxHeight: 160, borderRadius: 8, marginBottom: 10 }} />}
 

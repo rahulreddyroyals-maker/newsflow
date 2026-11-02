@@ -2,7 +2,7 @@
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, startAfter, limit, onSnapshot, serverTimestamp,
-  increment, arrayUnion, arrayRemove
+  increment, arrayUnion, arrayRemove, writeBatch
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase'
@@ -158,6 +158,31 @@ export async function approveDraft(draftEntry) {
 
 export async function rejectDraft(id, reason) {
   await updateDoc(doc(db, 'drafts', id), { status: 'rejected', rejectionReason: reason || '' })
+}
+
+// Reject many drafts at once. `items` = [{ id, headline }]. Uses batched writes
+// (200 drafts per batch = 400 ops) and writes one audit log entry per draft.
+export async function rejectDraftsBulk(items, reason, admin = {}) {
+  const CHUNK = 200
+  let done = 0
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const batch = writeBatch(db)
+    for (const it of items.slice(i, i + CHUNK)) {
+      batch.update(doc(db, 'drafts', it.id), { status: 'rejected', rejectionReason: reason || '' })
+      batch.set(doc(collection(db, 'auditLogs')), {
+        action: 'reject',
+        newsId: it.id,
+        headline: it.headline || '',
+        performedBy: admin.uid || null,
+        performedByName: admin.name || 'Admin',
+        details: `[bulk] ${reason || '(no reason given)'}`,
+        createdAt: serverTimestamp()
+      })
+    }
+    await batch.commit()
+    done += Math.min(CHUNK, items.length - i)
+  }
+  return done
 }
 
 // ---------- STORAGE ----------
